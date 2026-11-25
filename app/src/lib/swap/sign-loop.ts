@@ -126,33 +126,54 @@ export type RecheckDeps = {
   nonceOf: (hash: Hex) => Promise<number | null>;
   /** The account's nonce at the latest block: transactions below it are final, one way or another. */
   latestNonce: () => Promise<number>;
-  /** One direct receipt read, null when there is none. */
+  /**
+   * One direct receipt read. Resolves null only when the node says there is no such receipt
+   * (viem's TransactionReceiptNotFoundError); any other failure (HTTP 429, timeout) must reject,
+   * because "could not read" is not "does not exist".
+   */
   receipt: (hash: Hex) => Promise<TransactionReceipt | null>;
+  sleep: (ms: number) => Promise<void>;
 };
 
-export type Rechecked = Settled | { kind: "pending"; reason: string };
+export type Rechecked =
+  | Settled
+  | { kind: "pending"; reason: string }
+  /**
+   * No receipt after several reads, and the account has already used the transaction's nonce: it
+   * will never confirm under this hash (dropped, or replaced, possibly by a sped-up copy of the same
+   * call). The card is released but stays off until the page is reloaded.
+   */
+  | { kind: "released"; reason: string };
 
 /**
- * [Check again] for an unconfirmed transaction. Settles it when its receipt can be read. When it
- * cannot, and the account has already used the transaction's nonce at the latest block, that
- * transaction will never confirm (dropped, or replaced by one we cannot see): stop, so the card can
- * be released. Otherwise it is still pending and the card stays locked.
+ * [Check again] for an unconfirmed transaction. Settles it when its receipt can be read. Releases
+ * it only when every direct receipt read says "no such receipt" and the account has already used
+ * its nonce at the latest block. Any read that fails for another reason keeps it pending.
  */
 export async function recheckUnconfirmed(plan: SwapPlan, step: number, hash: Hex, knownNonce: number | null, deps: RecheckDeps): Promise<Rechecked> {
+  const firstLine = (e: unknown) => (e instanceof Error ? e.message : String(e)).split("\n")[0];
   try {
     return settle(plan, step, hash, await deps.wait(hash));
   } catch (error) {
-    const why = (error instanceof Error ? error.message : String(error)).split("\n")[0];
-    const nonce = knownNonce ?? (await deps.nonceOf(hash).catch(() => null));
-    if (nonce === null) return { kind: "pending", reason: why };
-    const latest = await deps.latestNonce().catch(() => null);
-    if (latest === null || latest <= nonce) return { kind: "pending", reason: why };
-    // The nonce is used. One direct read before calling it gone: a lagging node may have missed the receipt.
-    const receipt = await deps.receipt(hash).catch(() => null);
-    if (receipt) return settle(plan, step, hash, { receipt, replacement: null });
-    return {
-      kind: "stopped",
-      reason: `transaction ${step + 1} of ${plan.steps.length} has no receipt and the account has already used its nonce ${nonce}, so it was dropped or replaced`,
-    };
+    const why = firstLine(error);
+    try {
+      const nonce = knownNonce ?? (await deps.nonceOf(hash));
+      if (nonce === null) return { kind: "pending", reason: why };
+      const latest = await deps.latestNonce();
+      if (latest <= nonce) return { kind: "pending", reason: why };
+      // The nonce is used. Read the receipt directly a few times: a node a block behind may not have it yet.
+      for (let attempt = 0; attempt <= LAG_RETRIES; attempt++) {
+        if (attempt > 0) await deps.sleep(LAG_RETRY_MS);
+        const receipt = await deps.receipt(hash);
+        if (receipt) return settle(plan, step, hash, { receipt, replacement: null });
+      }
+      return {
+        kind: "released",
+        reason: `transaction ${step + 1} of ${plan.steps.length} has no receipt and the account has already used its nonce ${nonce}, so it was dropped or replaced (perhaps by a sped-up copy in your wallet)`,
+      };
+    } catch (readError) {
+      // Could not read the nonce or the receipt: that says nothing about the transaction. Stay pending.
+      return { kind: "pending", reason: firstLine(readError) };
+    }
   }
 }

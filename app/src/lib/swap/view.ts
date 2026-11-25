@@ -18,7 +18,11 @@ import type { Simulation } from "./read";
 export type Phase =
   | { kind: "idle" }
   | { kind: "signing"; step: number; total: number; waiting: "simulating" | "wallet" | "chain" }
-  | { kind: "blocked"; reason: string }
+  /**
+   * Signing stopped. With `at`, the card returns to idle once a plan simulated after `at` is on screen.
+   * Without it, the card stays off until the page is reloaded (an unconfirmed transaction was released).
+   */
+  | { kind: "blocked"; reason: string; at?: number }
   /** The wallet returned a hash but its receipt could not be read (RPC error, timeout). Nothing new may be signed. */
   | { kind: "unconfirmed"; step: number; total: number; hash: Hex; nonce: number | null }
   | { kind: "done"; hash: Hex; received: bigint | null; block: bigint }
@@ -36,6 +40,11 @@ export type ContestGate =
   | { state: "hold"; title: string; items?: string };
 
 export const NO_CONTEST_CHECK: ContestGate = { state: "ok" };
+
+/** The phase the card shows: a blocked phase with `at` lifts once a plan prepared after it is on screen. */
+export function effectivePhase(phase: Phase, preparedAt: number): Phase {
+  return phase.kind === "blocked" && phase.at !== undefined && preparedAt > phase.at ? { kind: "idle" } : phase;
+}
 
 /** Why a contest gate stops signing, or null when it allows it. */
 export function gateStopReason(gate: ContestGate): string | null {

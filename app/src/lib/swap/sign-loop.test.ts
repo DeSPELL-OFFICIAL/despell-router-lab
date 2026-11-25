@@ -219,11 +219,13 @@ describe("recheckUnconfirmed", () => {
   const SWAP = 2;
   const hash = hashOf(SWAP);
   const timeout = () => Promise.reject(new Error("Timed out while waiting for transaction"));
+  const rateLimited = () => Promise.reject(new Error("HTTP request failed. Status: 429"));
   const deps = (over: Partial<RecheckDeps>): RecheckDeps => ({
     wait: timeout,
     nonceOf: async () => 12,
     latestNonce: async () => 12,
     receipt: async () => null,
+    sleep: async () => {},
     ...over,
   });
 
@@ -236,18 +238,40 @@ describe("recheckUnconfirmed", () => {
     expect((await recheckUnconfirmed(plan, SWAP, hash, 12, deps({ latestNonce: async () => 12 }))).kind).toBe("pending");
   });
 
-  it("stops when the nonce is used and there is still no receipt: the transaction was dropped or replaced", async () => {
-    const r = await recheckUnconfirmed(plan, SWAP, hash, 12, deps({ latestNonce: async () => 13 }));
-    expect(r).toMatchObject({ kind: "stopped", reason: expect.stringContaining("nonce 12") });
+  it("releases only when every receipt read says 'no receipt' and the nonce is used", async () => {
+    let reads = 0;
+    const r = await recheckUnconfirmed(plan, SWAP, hash, 12, deps({ latestNonce: async () => 13, receipt: async () => (reads++, null) }));
+    expect(r).toMatchObject({ kind: "released", reason: expect.stringContaining("nonce 12") });
+    expect(reads).toBe(1 + LAG_RETRIES);
   });
 
-  it("reads the receipt directly once more before giving up on a used nonce", async () => {
-    const r = await recheckUnconfirmed(plan, SWAP, hash, 12, deps({ latestNonce: async () => 13, receipt: async (h) => receiptOf(h, 300n) }));
+  // A failed read is not "no receipt": with the receipt reads rate-limited, a confirmed swap must not be released.
+  it("stays pending when a receipt read fails with HTTP 429, even with the nonce used", async () => {
+    const r = await recheckUnconfirmed(plan, SWAP, hash, 12, deps({ wait: rateLimited, latestNonce: async () => 13, receipt: rateLimited }));
+    expect(r.kind).toBe("pending");
+  });
+
+  // A node a block behind: the nonce comes from a node that has the block, the first receipt reads from one that does not.
+  it("reads the receipt again when a lagging node does not have it yet", async () => {
+    let reads = 0;
+    const r = await recheckUnconfirmed(
+      plan,
+      SWAP,
+      hash,
+      12,
+      deps({ latestNonce: async () => 13, receipt: async (h) => (++reads < 3 ? null : receiptOf(h, 300n)) }),
+    );
     expect(r.kind).toBe("confirmed");
+    expect(reads).toBe(3);
   });
 
-  it("looks the nonce up when it was not known, and stays pending when it cannot", async () => {
-    expect((await recheckUnconfirmed(plan, SWAP, hash, null, deps({ nonceOf: async () => 5, latestNonce: async () => 6 }))).kind).toBe("stopped");
+  it("stays pending when the nonce cannot be read", async () => {
+    expect((await recheckUnconfirmed(plan, SWAP, hash, null, deps({ nonceOf: rateLimited, latestNonce: async () => 99 }))).kind).toBe("pending");
+    expect((await recheckUnconfirmed(plan, SWAP, hash, 12, deps({ latestNonce: rateLimited }))).kind).toBe("pending");
     expect((await recheckUnconfirmed(plan, SWAP, hash, null, deps({ nonceOf: async () => null, latestNonce: async () => 99 }))).kind).toBe("pending");
+  });
+
+  it("looks the nonce up when it was not known", async () => {
+    expect((await recheckUnconfirmed(plan, SWAP, hash, null, deps({ nonceOf: async () => 5, latestNonce: async () => 6 }))).kind).toBe("released");
   });
 });

@@ -2,16 +2,17 @@
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { isAddressEqual, type Hex, type PublicClient } from "viem";
+import { isAddressEqual, TransactionReceiptNotFoundError, type Hex, type PublicClient } from "viem";
 import { useConnection, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
 import { useWalletPicker } from "@/components/wallet/providers";
 import type { Outcome, Prerequisite } from "@/components/sign-card/sign-card";
 import { txUrl, type SwapChain } from "@/lib/swap/chains";
 import { fmtEth } from "@/lib/swap/format";
 import { buildPlan, type SwapPlan } from "@/lib/swap/plan";
-import { readQuote, readWallet, receivedFromReceipt, simulatePlan, type Simulation } from "@/lib/swap/read";
-import { recheckUnconfirmed, runSigning, type Replacement, type SignResult, type WaitResult } from "@/lib/swap/sign-loop";
-import { confirmedApprovals, gateStopReason, type CardState, type ContestGate, type Phase } from "@/lib/swap/view";
+import { afterRecheck, afterSigning, firstLine, type CardUpdate } from "@/lib/swap/outcome";
+import { readQuote, readWallet, simulatePlan, type Simulation } from "@/lib/swap/read";
+import { recheckUnconfirmed, runSigning, type Replacement, type WaitResult } from "@/lib/swap/sign-loop";
+import { effectivePhase as phaseOnScreen, gateStopReason, type CardState, type ContestGate, type Phase } from "@/lib/swap/view";
 
 /*
   One swap card's life: quote -> plan for the connected wallet -> simulate
@@ -33,18 +34,10 @@ import { confirmedApprovals, gateStopReason, type CardState, type ContestGate, t
 
 const REFRESH_MS = 20_000;
 
+/** Wall-clock time for event handlers (never called while rendering). */
+const nowMs = () => Date.now();
+
 type Frozen = { plan: SwapPlan; simulation: Extract<Simulation, { ok: true }> };
-
-function isUserRejection(error: unknown): boolean {
-  for (let e: unknown = error; e && typeof e === "object"; e = (e as { cause?: unknown }).cause) {
-    const { code, name, message } = e as { code?: unknown; name?: unknown; message?: unknown };
-    if (code === 4001 || name === "UserRejectedRequestError") return true;
-    if (typeof message === "string" && /user (rejected|denied)/iu.test(message)) return true;
-  }
-  return false;
-}
-
-const firstLine = (error: unknown) => (error instanceof Error ? (error as { shortMessage?: string }).shortMessage ?? error.message : String(error)).split("\n")[0];
 
 export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
   const wagmiClient = usePublicClient({ chainId: chain.id });
@@ -56,7 +49,7 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
   const picker = useWalletPicker();
   const queryClient = useQueryClient();
 
-  const [phase, setPhase] = useState<Phase & { at?: number }>({ kind: "idle" });
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [frozen, setFrozen] = useState<Frozen | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -109,9 +102,8 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
     placeholderData: keepPreviousData,
   });
 
-  // A stop found right before signing holds until a fresh plan has been simulated after it.
-  const effectivePhase: Phase =
-    phase.kind === "blocked" && phase.at !== undefined && prepQ.dataUpdatedAt > phase.at ? { kind: "idle" } : phase;
+  // A stop found right before signing holds until a fresh plan has been simulated after it (or, without `at`, until reload).
+  const effectivePhase: Phase = phaseOnScreen(phase, prepQ.dataUpdatedAt);
 
   const current = frozen ?? (prepQ.data && account && isAddressEqual(prepQ.data.plan.account, account) ? prepQ.data : null);
 
@@ -143,43 +135,11 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
     return { receipt, replacement: seen.replacement };
   }
 
-  const stillApproved = (plan: SwapPlan, confirmed: number) => {
-    const lines = confirmedApprovals(chain, plan, confirmed);
-    return lines.length > 0 ? ` Still approved: ${lines.join("; ")}. The next quote uses ${lines.length > 1 ? "them" : "it"}.` : "";
-  };
-
-  /** Puts a finished or stopped signing run on the card. */
-  function show(plan: SwapPlan, result: SignResult) {
-    switch (result.kind) {
-      case "done":
-        setPhase({ kind: "done", hash: result.hash, received: receivedFromReceipt(chain, result.receipt), block: result.receipt.blockNumber });
-        // A note left by an earlier "not confirmed" no longer holds.
-        setNotice(null);
-        return;
-      case "reverted":
-        setPhase({ kind: "failed", hash: result.hash, reason: `transaction ${result.step + 1} of ${plan.steps.length} reverted on chain` });
-        setNotice(stillApproved(plan, result.step).trim() || null);
-        return;
-      case "unconfirmed":
-        // Keep the plan frozen: the transaction may be on chain, and a new plan would offer to sign it again.
-        setPhase({ kind: "unconfirmed", step: result.step, total: plan.steps.length, hash: result.hash, nonce: result.nonce });
-        setNotice(`Transaction ${result.step + 1} of ${plan.steps.length} was sent, but its receipt could not be read (${firstLine(result.error)}). Check it before signing anything else.`);
-        return;
-      case "stopped":
-        setFrozen(null);
-        setPhase({ kind: "blocked", reason: result.reason, at: Date.now() });
-        setNotice(`Stopped before signing transaction ${result.step + 1}: ${result.reason}.${stillApproved(plan, result.step)} Nothing else was sent.`);
-        return;
-      case "error":
-        // Blocked, not idle: the button stays off until a new plan has been simulated after this.
-        setFrozen(null);
-        setPhase({ kind: "blocked", reason: isUserRejection(result.error) ? "declined in your wallet" : "the wallet did not send it", at: Date.now() });
-        setNotice(
-          (isUserRejection(result.error) ? "Declined in your wallet." : `Not sent: ${firstLine(result.error)}.`) +
-            (result.step === 0 ? " Nothing was sent." : `${stillApproved(plan, result.step)} The swap was not sent.`),
-        );
-        return;
-    }
+  /** Applies an outcome from lib/swap/outcome.ts to the card. */
+  function apply(update: CardUpdate) {
+    if (update.frozen === "release") setFrozen(null);
+    if (update.phase) setPhase(update.phase);
+    setNotice(update.notice);
   }
 
   async function sign() {
@@ -201,10 +161,10 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
         onPhase: (p) => {
           if (alive.current) setPhase(p);
         },
-        nowMs: () => Date.now(),
+        nowMs,
         sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
       });
-      if (alive.current) show(plan, result);
+      if (alive.current) apply(afterSigning(chain, plan, result, nowMs()));
     } catch (error) {
       // runSigning returns its outcomes; this is a bug path. Keep the card locked rather than offer a new plan,
       // because what was sent is unknown.
@@ -226,30 +186,17 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
         wait: (h) => waitFor(h, 15_000),
         nonceOf: (h) => client.getTransaction({ hash: h }).then((t) => t.nonce),
         latestNonce: () => client.getTransactionCount({ address: plan.account, blockTag: "latest" }),
-        receipt: (h) => client.getTransactionReceipt({ hash: h }).catch(() => null),
+        // Null only when the node says the receipt does not exist; any other error rejects and keeps it pending.
+        receipt: (h) =>
+          client.getTransactionReceipt({ hash: h }).catch((e: unknown) => {
+            if (e instanceof TransactionReceiptNotFoundError) return null;
+            throw e;
+          }),
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       });
-      if (!alive.current) return;
-      switch (r.kind) {
-        case "pending":
-          setNotice(`Still not confirmed (${r.reason}). Check again in a moment; nothing new can be signed until then.`);
-          return;
-        case "stopped":
-          setFrozen(null);
-          setPhase({ kind: "blocked", reason: r.reason, at: Date.now() });
-          setNotice(`Released: ${r.reason}.${stillApproved(plan, step)} Check the transaction on the explorer, then reload the page before signing again.`);
-          return;
-        case "reverted":
-          return show(plan, { kind: "reverted", step, hash: r.hash });
-        case "confirmed":
-          if (plan.steps[step].kind === "swap") return show(plan, { kind: "done", step, hash: r.hash, receipt: r.receipt });
-          // An approval confirmed: release the plan, blocked until a new plan (which skips this step) is simulated.
-          setFrozen(null);
-          setPhase({ kind: "blocked", reason: `transaction ${step + 1} of ${plan.steps.length} confirmed; preparing the rest`, at: Date.now() });
-          setNotice(`Transaction ${step + 1} of ${plan.steps.length} is confirmed.${stillApproved(plan, step + 1)} Nothing else was sent.`);
-          return;
-      }
+      if (alive.current) apply(afterRecheck(chain, plan, step, r, nowMs()));
     } catch (error) {
-      if (alive.current) setNotice(`Still not confirmed (${firstLine(error)}). Check again in a moment; nothing new can be signed until then.`);
+      if (alive.current) setNotice(`Still not confirmed (${firstLine(error)}). Check again in a moment, or check it on the explorer and reload the page; nothing new can be signed until then.`);
     } finally {
       setRechecking(false);
       void queryClient.invalidateQueries({ queryKey: walletKey });
