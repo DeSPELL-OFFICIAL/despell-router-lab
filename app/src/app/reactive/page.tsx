@@ -150,8 +150,8 @@ export default async function Page() {
         <h1 className="lab-h1">On-chain reflex</h1>
         <p className="lab-lede">
           When a pool the DeSpell router might use changes a setting, a Reactive contract marks that pool as narrowed on-chain, and
-          anyone can read the mark. The router caps a narrowed pool at 0.1x its usual size, and the quotes in this lab leave a
-          marked pool out. These numbers were measured on testnets, with every transaction linked.
+          anyone can read the mark. The router caps a narrowed pool at 0.1x its usual size. These numbers were measured on
+          testnets, with every transaction linked.
         </p>
         <dl className={styles.meta}>
           <div>
@@ -291,7 +291,7 @@ export default async function Page() {
             the next change could be measured.
           </li>
           <li>
-            PoolGuard only records. Quotes and other wallets read it. Neither contract moves anyone&apos;s money.
+            PoolGuard only records: any quote, wallet or agent can read it. Neither contract moves anyone&apos;s money.
           </li>
           <li>
             Contracts: hook{" "}
