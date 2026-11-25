@@ -36,8 +36,15 @@ const screen = (rows: RowView[], extra: Partial<WrapperScreen> = {}): WrapperScr
   ...extra,
 });
 
-const render = (s: WrapperScreen, production = true) =>
-  renderToStaticMarkup(<WrapperList screen={s} connectorHost={production ? "app.despell.io" : "test.despell.io"} production={production} />);
+const render = (s: WrapperScreen, production = true, backingOffUntil: string | null = null) =>
+  renderToStaticMarkup(
+    <WrapperList
+      screen={s}
+      connectorHost={production ? "app.despell.io" : "test.despell.io"}
+      production={production}
+      backingOffUntil={backingOffUntil}
+    />,
+  );
 
 describe("WrapperList", () => {
   it("keeps 'receives the most' on the true best and disables its buy when DeSpell cannot buy it", () => {
@@ -58,7 +65,14 @@ describe("WrapperList", () => {
     const html = render(screen([row("NVDAX", 196)], { noBest: "incomplete", incomplete: 3 }));
     expect(html).toContain('data-state="no-best"');
     expect(html).toContain("No winner this time.");
+    expect(html).toContain("Measure again");
     expect(html).not.toContain("data-badge=");
+  });
+
+  it("while backing off, says when the next measurement is instead of offering to measure again", () => {
+    const html = render(screen([row("NVDAX", 196)], { noBest: "incomplete", incomplete: 3 }), true, "2026-11-25T19:50:00.000Z");
+    expect(html).toMatch(/Next measurement after (<!-- -->)?19:50:00 UTC/);
+    expect(html).not.toContain("Measure again");
   });
 
   it("names the price source, times and where buy links open", () => {

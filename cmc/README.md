@@ -52,7 +52,7 @@ The lab app's `/cmc` page shows this ranking with a [Buy] button per wrapper. Th
 | `LIFI_API_KEY` | no | LI.FI quotes above the keyless limit (a few dozen an hour; one page view uses about 13) |
 | `DESPELL_MCP_URL` | no | DeSpell connector; production app by default |
 
-The page reuses one measurement: 5 minutes when complete, 1 minute when only a DeSpell check failed, and 5, 10, 20, then 30 minutes while quotes keep failing (usually LI.FI's rate limit). The Buy action only accepts a row that this measured screen shows as buyable, fixes the amount on the server, and asks for at most 20 links a minute per server process.
+The page reuses one measurement: 5 minutes when complete, 1 minute when only a DeSpell check failed, 5, 10, 20, then 30 minutes while quotes keep failing (usually LI.FI's rate limit), when the page says when it will measure next, and 1 minute after an error. The Buy action only accepts a row that this measured screen shows as buyable, fixes the amount on the server, and asks for at most 20 links a minute per server process.
 
 ## Use
 

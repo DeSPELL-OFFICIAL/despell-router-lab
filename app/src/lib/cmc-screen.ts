@@ -10,7 +10,13 @@ import { createMeasureCache, type MeasureKind } from "./measure-cache";
 */
 
 export type ScreenResult =
-  | { kind: "screen"; screen: WrapperScreen; target: Extract<ConnectorTarget, { ok: true }> }
+  | {
+      kind: "screen";
+      screen: WrapperScreen;
+      target: Extract<ConnectorTarget, { ok: true }>;
+      /** Set while quotes keep failing: the cached screen is kept until then (ISO time). */
+      backingOffUntil: string | null;
+    }
   | { kind: "setup"; message: string }
   | { kind: "error" };
 
@@ -29,7 +35,7 @@ export async function getWrapperScreen(): Promise<ScreenResult> {
   if (!target.ok) return { kind: "setup", message: target.error };
   try {
     const lifiKey = lifiApiKey();
-    const screen = await cache(() =>
+    const measured = await cache(() =>
       loadWrapperScreen({
         cmc: createCmcClient({ apiKey }),
         quoter: createLifiQuoter(lifiKey ? { apiKey: lifiKey } : {}),
@@ -38,7 +44,12 @@ export async function getWrapperScreen(): Promise<ScreenResult> {
         spendUsd: CMC_SPEND_USD,
       }),
     );
-    return { kind: "screen", screen, target };
+    return {
+      kind: "screen",
+      screen: measured.value,
+      target,
+      backingOffUntil: measured.kind === "back_off" ? new Date(measured.nextMeasureAt).toISOString() : null,
+    };
   } catch (err) {
     // The detail (CMC's code and message, never the key) stays in the server log.
     console.error("cmc compare failed", err instanceof Error ? err.message : err);

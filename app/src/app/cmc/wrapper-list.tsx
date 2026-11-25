@@ -102,7 +102,15 @@ function Row({ row, open }: { row: RowView; open: boolean }) {
   );
 }
 
-export function WrapperList({ screen, connectorHost, production }: { screen: WrapperScreen; connectorHost: string; production: boolean }) {
+type ListProps = {
+  screen: WrapperScreen;
+  connectorHost: string;
+  production: boolean;
+  /** While quotes keep failing the same screen is kept until this time; reloading before then shows it again. */
+  backingOffUntil?: string | null;
+};
+
+export function WrapperList({ screen, connectorHost, production, backingOffUntil = null }: ListProps) {
   return (
     <section className="ds-card cmc-card" aria-label={`${screen.asset.name} tokenized wrappers`}>
       <div className="ds-card-head">
@@ -119,9 +127,15 @@ export function WrapperList({ screen, connectorHost, production }: { screen: Wra
             <span className="ds-sum-title">
               <b>No winner this time.</b> {NO_BEST[screen.noBest]}
             </span>
-            <Link href="/cmc" className="ds-sum-toggle" prefetch={false}>
-              Measure again
-            </Link>
+            {backingOffUntil ? (
+              <span className="ds-sum-toggle" data-next-measure>
+                Next measurement after {timeUtc(backingOffUntil)}
+              </span>
+            ) : (
+              <Link href="/cmc" className="ds-sum-toggle" prefetch={false}>
+                Measure again
+              </Link>
+            )}
           </div>
         </div>
       )}

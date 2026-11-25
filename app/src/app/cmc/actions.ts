@@ -47,12 +47,13 @@ export async function prepareBuyLink(_prev: BuyLinkState, form: FormData): Promi
   const tokenAddress = String(form.get("tokenAddress") ?? "");
   if (!Number.isInteger(chainId) || !USDC[chainId] || !ADDRESS_RE.test(tokenAddress)) return CANNOT_BUY;
 
-  if (!takeBuySlot()) return { status: "error", message: "Many buy links were asked for just now. Try again in a minute." };
-
   const measured = await getWrapperScreen();
   if (measured.kind !== "screen") return { status: "error", message: "Buying is not available right now." };
   const row = measured.screen.rows.find((r) => r.chainId === chainId && r.address.toLowerCase() === tokenAddress.toLowerCase());
   if (!row || row.buy.kind !== "enabled") return CANNOT_BUY;
+
+  // Counted only for requests that would really reach DeSpell.
+  if (!takeBuySlot()) return { status: "error", message: "Many buy links were asked for just now. Try again in a minute." };
 
   try {
     const link = await prepareWrapperBuy(createDespellConnector({ url: measured.target.url }), {

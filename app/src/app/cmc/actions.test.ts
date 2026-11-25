@@ -40,7 +40,7 @@ const SCREEN: WrapperScreen = {
 };
 
 const target = { ok: true as const, url: "https://app.despell.io/api/mcp", host: "app.despell.io", production: true };
-const getWrapperScreen = vi.fn(async () => ({ kind: "screen" as const, screen: SCREEN, target }));
+const getWrapperScreen = vi.fn(async () => ({ kind: "screen" as const, screen: SCREEN, target, backingOffUntil: null }));
 vi.mock("@/lib/cmc-screen", () => ({ getWrapperScreen: () => getWrapperScreen() }));
 
 type Call = { url: string; trades: Record<string, unknown>[] };
@@ -161,6 +161,14 @@ describe("prepareBuyLink", () => {
     expect(results.filter((s) => s === "ready")).toHaveLength(BUY_LINKS_PER_MINUTE);
     expect(results.at(-1)).toBe("error");
     expect(calls).toHaveLength(BUY_LINKS_PER_MINUTE);
+  });
+
+  it("does not count refused requests against the cap", async () => {
+    vi.stubGlobal("fetch", connectorEcho());
+    const prepareBuyLink = await load();
+    const { BUY_LINKS_PER_MINUTE } = await import("@/lib/cmc-env");
+    for (let i = 0; i < BUY_LINKS_PER_MINUTE * 2; i++) await prepareBuyLink({ status: "idle" }, form({ chainId: "42161", tokenAddress: RNVDA }));
+    expect((await prepareBuyLink({ status: "idle" }, form({ chainId: "8453", tokenAddress: NVDAC }))).status).toBe("ready");
   });
 
   it("does not hand out a link that points anywhere but DeSpell", async () => {
