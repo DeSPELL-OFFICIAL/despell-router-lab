@@ -16,17 +16,21 @@ import {
 ///
 ///   --sig "status()"          read only: balances, what each step still needs, the processor and circuit if made
 ///   --sig "swapForBem()"      OKB -> BEM through a LI.FI quote (quote/bem-swap.json, made by scripts/quote-bem.ts),
-///                             checked here: caller, receiver, token, minimum received, OKB spent, age. Skipped when
-///                             the wallet already holds the BEM the next steps need.
+///                             checked here: caller, token, OKB spent, age, and the receiver and minimum received
+///                             read from the swap calldata itself. Skipped when the wallet already holds the BEM the
+///                             next steps need.
 ///   --sig "createProcessor()" BEM approve(factory, deployFee) -> factory.createCPU. Skipped if this wallet already
 ///                             made a DeSpell processor.
 ///   --sig "tapeOutCircuit()"  finds the processor this wallet made (on chain, after it was made, so no transaction
-///                             goes to an address that only existed in a simulation), then BEM approve(transistors,
+///                             goes to an address that only existed in a simulation; DESPELL_PROCESSOR names it once it
+///                             is recorded), then BEM approve(transistors,
 ///                             mint cost) -> mint(0, nand) -> tapeout{TAPEOUT_FEE}, and checks eval on the sample
 ///                             vectors against the rule function. NAND already held are not bought again; a netlist
 ///                             already on the processor is only checked.
 ///
 /// Every approval is for the exact amount. Key: PRIVATE_KEY in the environment, or --sender for a dry run.
+/// Limits: the key reaches forge through the environment of one local process (with-key.mjs); the TapeOut factory is
+/// upgradeable, so its fees and shapes are read again on every run.
 contract TapeOutScript is Script {
     ITapeOutFactory internal constant FACTORY = ITapeOutFactory(TapeOutAddresses.FACTORY);
     IERC20 internal constant BEM = IERC20(TapeOutAddresses.BEM);
@@ -38,7 +42,7 @@ contract TapeOutScript is Script {
     uint256 internal constant SUPPLY = 10_000;
     /// Smallest NAND price (1e-8 BEM). The protocol fee per mint call is the factory's.
     uint256 internal constant NAND_PRICE = 1;
-    /// How far back the factory's list is searched for this wallet's processor.
+    /// How far back the factory's list is searched for this wallet's processor when DESPELL_PROCESSOR is not set.
     uint256 internal constant SEARCH = 50;
 
     /// The swap may spend at most this much OKB (about 2 USD at 79 USD per OKB).
@@ -49,6 +53,12 @@ contract TapeOutScript is Script {
     string internal constant NETLIST = "../circuit/pool-judgment.json";
     string internal constant SAMPLES = "../circuit/pool-judgment-samples.json";
     string internal constant QUOTE = "quote/bem-swap.json";
+
+    /// LI.FI swap functions that take native OKB. All share the head (bytes32 transactionId, string integrator,
+    /// string referrer, address receiver, uint256 minAmountOut, ...): word 3 is who receives, word 4 the minimum.
+    bytes4 internal constant SWAP_GENERIC = 0x4630a0d8; // swapTokensGeneric(...,(address,address,address,address,uint256,bytes,bool)[])
+    bytes4 internal constant SWAP_SINGLE_NATIVE = 0xaf7060fd; // swapTokensSingleV3NativeToERC20(...)
+    bytes4 internal constant SWAP_MULTIPLE_NATIVE = 0x736eac0b; // swapTokensMultipleV3NativeToERC20(...)
 
     struct Circuit {
         bytes netlist;
@@ -66,12 +76,16 @@ contract TapeOutScript is Script {
         console.log("wallet", sender);
         console.log("OKB held (wei):", sender.balance);
         console.log("BEM held / needed for the steps left (1e-8):", BEM.balanceOf(sender), bemNeeded(sender, circuit));
-        (ITapeOutProcessor processor,) = findProcessor(sender);
+        console.log("BEM allowance to the factory (1e-8):", BEM.allowance(sender, address(FACTORY)));
+        (ITapeOutProcessor processor, ITapeOutTransistors transistors) = findProcessor(sender);
         if (address(processor) == address(0)) {
             console.log("no DeSpell processor made by this wallet yet");
             return;
         }
         console.log("processor", address(processor));
+        console.log("transistors", address(transistors));
+        console.log("BEM allowance to the transistors (1e-8):", BEM.allowance(sender, address(transistors)));
+        console.log("NAND held:", transistors.balanceOf(sender, 0));
         uint256 id = existingCircuit(processor, circuit.netlist);
         if (id == 0) console.log("circuit not taped out yet");
         else console.log("circuit id", id);
@@ -89,7 +103,7 @@ contract TapeOutScript is Script {
             return;
         }
 
-        string memory json = vm.readFile(QUOTE);
+        string memory json = vm.readFile(vm.envOr("BEM_QUOTE", QUOTE));
         address to = vm.parseJsonAddress(json, ".to");
         bytes memory data = vm.parseJsonBytes(json, ".data");
         uint256 value = vm.parseJsonUint(json, ".value");
@@ -103,6 +117,7 @@ contract TapeOutScript is Script {
         require(minOut >= needed - held, "quote's minimum received is too small");
         require(value <= MAX_SWAP_OKB, "quote spends too much OKB");
         require(block.timestamp <= fetchedAt + QUOTE_TTL, "quote is too old: fetch it again");
+        requireSwapCall(data, sender, needed - held);
         console.log("swap: OKB in (wei), BEM minimum out (1e-8):", value, minOut);
 
         start(key);
@@ -162,6 +177,25 @@ contract TapeOutScript is Script {
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────────────────
 
+    /// The receiver and the minimum are read from the calldata LI.FI will run, not only from the quote file's fields.
+    function requireSwapCall(bytes memory data, address receiver, uint256 minimum) internal pure {
+        require(data.length >= 4 + 5 * 32, "swap calldata is too short");
+        bytes4 selector = bytes4(data);
+        require(
+            selector == SWAP_GENERIC || selector == SWAP_SINGLE_NATIVE || selector == SWAP_MULTIPLE_NATIVE,
+            "swap calldata calls an unexpected LI.FI function"
+        );
+        require(calldataWord(data, 3) == uint256(uint160(receiver)), "swap calldata pays another address");
+        require(calldataWord(data, 4) >= minimum, "swap calldata's minimum received is too small");
+    }
+
+    /// Argument word `index` of ABI calldata (after the 4-byte selector).
+    function calldataWord(bytes memory data, uint256 index) internal pure returns (uint256 value) {
+        assembly ("memory-safe") {
+            value := mload(add(add(data, 0x24), mul(index, 0x20)))
+        }
+    }
+
     function onXLayer() internal view {
         require(block.chainid == TapeOutAddresses.CHAIN_ID, "not X Layer mainnet");
     }
@@ -198,21 +232,36 @@ contract TapeOutScript is Script {
         return transistors.mintPrice() * (circuit.nand - held) + transistors.protocolFee();
     }
 
-    /// The newest processor in the factory's list that this wallet made under our name.
+    /// This wallet's DeSpell processor: the one DESPELL_PROCESSOR names (checked to be ours), or else the newest in the
+    /// factory's last SEARCH entries that this wallet made under our name.
     function findProcessor(address sender) internal view returns (ITapeOutProcessor, ITapeOutTransistors) {
+        address recorded = vm.envOr("DESPELL_PROCESSOR", address(0));
+        if (recorded != address(0)) {
+            ITapeOutProcessor named = ITapeOutProcessor(recorded);
+            ITapeOutTransistors namedTransistors = ITapeOutTransistors(named.transistors());
+            require(
+                isOurs(named, namedTransistors, sender),
+                "DESPELL_PROCESSOR is not a DeSpell processor made by this wallet"
+            );
+            return (named, namedTransistors);
+        }
         uint256 count = FACTORY.cpuCount();
         uint256 stop = count > SEARCH ? count - SEARCH : 0;
         for (uint256 i = count; i > stop; i--) {
             ITapeOutProcessor processor = ITapeOutProcessor(FACTORY.cpus(i - 1));
             ITapeOutTransistors transistors = ITapeOutTransistors(processor.transistors());
-            if (
-                transistors.creator() == sender && transistors.circuits() == address(processor)
-                    && keccak256(bytes(processor.name())) == keccak256(bytes(NAME))
-            ) {
-                return (processor, transistors);
-            }
+            if (isOurs(processor, transistors, sender)) return (processor, transistors);
         }
         return (ITapeOutProcessor(address(0)), ITapeOutTransistors(address(0)));
+    }
+
+    function isOurs(ITapeOutProcessor processor, ITapeOutTransistors transistors, address sender)
+        internal
+        view
+        returns (bool)
+    {
+        return transistors.creator() == sender && transistors.circuits() == address(processor)
+            && keccak256(bytes(processor.name())) == keccak256(bytes(NAME));
     }
 
     /// The id of this netlist on the processor, or 0.

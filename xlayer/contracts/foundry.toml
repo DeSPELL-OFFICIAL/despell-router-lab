@@ -8,8 +8,8 @@ solc_version = "0.8.26"
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
-# The scripts read the netlist and its samples from ../circuit, and a swap quote from ./quote (not committed).
-fs_permissions = [{ access = "read", path = "../circuit" }, { access = "read", path = "./quote" }]
+# The scripts read the netlist and its samples from ../circuit, and a swap quote from ./quote (not committed; the fork test also writes tampered copies there).
+fs_permissions = [{ access = "read", path = "../circuit" }, { access = "read-write", path = "./quote" }]
 
 [rpc_endpoints]
 xlayer = "https://rpc.xlayer.tech"

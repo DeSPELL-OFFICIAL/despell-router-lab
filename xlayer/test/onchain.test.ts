@@ -70,3 +70,39 @@ test("the reader refuses a bad address and passes RPC errors on", async () => {
   const down = new XLayerReader("http://fake", async () => ({ ok: false, status: 429, json: async () => ({}) }));
   await assert.rejects(down.chainId(), /HTTP 429/u);
 });
+
+test("the processor search finds only this wallet's DeSpell processor, newest first", async () => {
+  const wallet = "0x00000000000000000000000000000000000000a1";
+  const other = "0x00000000000000000000000000000000000000b2";
+  const address = (n: number) => `0x${n.toString(16).padStart(40, "0")}`;
+  // Factory list: 0 ours (older), 1 someone else's, 2 ours under another name, 3 ours (newest).
+  const processors = [
+    { processor: address(0x100), transistors: address(0x200), creator: wallet, name: "DeSpell Pool Judgment" },
+    { processor: address(0x101), transistors: address(0x201), creator: other, name: "DeSpell Pool Judgment" },
+    { processor: address(0x102), transistors: address(0x202), creator: wallet, name: "Something Else" },
+    { processor: address(0x103), transistors: address(0x203), creator: wallet, name: "DeSpell Pool Judgment" },
+  ];
+  const abiString = (text: string) => returnBytes(Uint8Array.from(Buffer.from(text, "utf8")));
+  const abiAddress = (value: string) => `0x${value.slice(2).padStart(64, "0")}`;
+  const factory = async (_url: string, init: { body: string }) => {
+    const request = JSON.parse(init.body) as { id: number; method: string; params: [{ to: string; data: string }] };
+    const reply = (result: string) => ({ ok: true, status: 200, json: async () => ({ id: request.id, result }) });
+    const to = request.params[0].to.toLowerCase();
+    const data = request.params[0].data.slice(2);
+    const selector = data.slice(0, 8);
+    if (selector === SELECTOR.cpuCount) return reply(`0x${word(processors.length)}`);
+    if (selector === SELECTOR.cpus) return reply(abiAddress(processors[Number(BigInt(`0x${data.slice(8)}`))]!.processor));
+    const byProcessor = processors.find((entry) => entry.processor === to);
+    const byTransistors = processors.find((entry) => entry.transistors === to);
+    if (byProcessor && selector === SELECTOR.transistors) return reply(abiAddress(byProcessor.transistors));
+    if (byProcessor && selector === SELECTOR.name) return reply(abiString(byProcessor.name));
+    if (byTransistors && selector === SELECTOR.creator) return reply(abiAddress(byTransistors.creator));
+    if (byTransistors && selector === SELECTOR.circuits) return reply(abiAddress(byTransistors.processor));
+    throw new Error(`unexpected call ${selector} to ${to}`);
+  };
+  const search = new XLayerReader("http://fake", factory);
+  assert.deepEqual(await search.findDespellProcessor(wallet), { processor: address(0x103), transistors: address(0x203) });
+  assert.equal(await search.findDespellProcessor("0x00000000000000000000000000000000000000c3"), null);
+  assert.equal((await search.isDespellProcessor(address(0x102), wallet)).ours, false, "another name is not ours");
+  assert.equal((await search.isDespellProcessor(address(0x101), wallet)).ours, false, "another creator is not ours");
+});

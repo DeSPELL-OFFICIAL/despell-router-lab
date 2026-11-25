@@ -1,7 +1,8 @@
 // Checks the taped-out pool judgment circuit on X Layer mainnet against the rule function. Read only, no key.
 //
-//   node scripts/check-tapeout.ts --processor 0x… --id N
+//   node scripts/check-tapeout.ts --processor 0x… [--id N]
 //
+// Without --id the circuit is found on the processor by its netlist.
 // Reads circuitInfo and the netlist back and compares them with circuit/pool-judgment.json, then asks the chain's
 // `eval` for every sample in circuit/pool-judgment-samples.json and compares each answer with the rule function.
 // Prints one line per sample (name, input vector, chain, rule) and fails on any difference.
@@ -10,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import { ARTIFACT_URL, SAMPLES_URL } from "../src/artifact.ts";
 import { decodeInput, decodeOutput, INPUT_COUNT, OUTPUT_COUNT } from "../src/bits.ts";
-import { toHex } from "../src/netlist.ts";
+import { fromHex, toHex } from "../src/netlist.ts";
 import { judgeOnChain, X_LAYER_CHAIN_ID, X_LAYER_PUBLIC_RPC, XLayerReader } from "../src/onchain.ts";
 import { judge } from "../src/rule.ts";
 
@@ -21,17 +22,21 @@ function arg(name: string): string | undefined {
 
 const processor = arg("processor");
 const idText = arg("id");
-if (!processor || !/^0x[0-9a-fA-F]{40}$/u.test(processor) || !idText || !/^[0-9]+$/u.test(idText)) {
-  console.error("Usage: node scripts/check-tapeout.ts --processor 0x… --id N");
+if (!processor || !/^0x[0-9a-fA-F]{40}$/u.test(processor) || (idText !== undefined && !/^[0-9]+$/u.test(idText))) {
+  console.error("Usage: node scripts/check-tapeout.ts --processor 0x… [--id N]");
   process.exit(2);
 }
-const id = Number(idText);
 const artifact = JSON.parse(readFileSync(ARTIFACT_URL, "utf8")) as { netlist: string; nand: number };
 const samples = JSON.parse(readFileSync(SAMPLES_URL, "utf8")) as { names: string[]; vectors: number[]; outputs: number[] };
 const reader = new XLayerReader(process.env.XLAYER_RPC ?? X_LAYER_PUBLIC_RPC);
 
 const chainId = await reader.chainId();
 if (chainId !== X_LAYER_CHAIN_ID) throw new Error(`RPC is chain ${chainId}, not X Layer (196)`);
+const id = idText !== undefined ? Number(idText) : await reader.findCircuit(processor, fromHex(artifact.netlist));
+if (id === null) {
+  console.error(`the pool judgment netlist is not on processor ${processor}`);
+  process.exit(1);
+}
 const info = await reader.circuitInfo(processor, id);
 const netlistSame = toHex(await reader.netlist(processor, id)) === artifact.netlist;
 console.log(`processor ${processor}, circuit #${id}: ${info.nIn} in, ${info.nOut} out, ${info.gateCount} NAND, state ${info.nState}`);

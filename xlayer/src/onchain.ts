@@ -20,7 +20,18 @@ export const SELECTOR = {
   protocolFee: "b0e21e8a", // protocolFee()
   supplyCap: "8f770ad0", // supplyCap()
   minted: "4f02c420", // minted()
+  nextId: "61b8ce8c", // nextId()
+  name: "06fdde03", // name()
+  cpuCount: "a94da8a7", // cpuCount() on the factory
+  cpus: "d2c26963", // cpus(uint256) on the factory
+  creator: "02d05d3f", // creator() on a transistor contract
+  circuits: "5f48772d", // circuits() on a transistor contract
 } as const;
+
+/** TapeOut CPU factory on X Layer mainnet. */
+export const TAPEOUT_FACTORY = "0x1f09DAeFA827f02CBb40967cc91b259763760761";
+/** The name the tape-out script gives the DeSpell processor. */
+export const DESPELL_PROCESSOR_NAME = "DeSpell Pool Judgment";
 
 export type CircuitInfo = { readonly nIn: number; readonly nOut: number; readonly nState: number; readonly gateCount: number };
 
@@ -123,6 +134,44 @@ export class XLayerReader {
 
   async addressView(contract: string, selector: string): Promise<string> {
     return `0x${(await this.call(contract, selector)).slice(-40)}`;
+  }
+
+  async stringView(contract: string, selector: string): Promise<string> {
+    return Buffer.from(decodeBytesResult(await this.call(contract, selector))).toString("utf8");
+  }
+
+  /** Is `processor` a DeSpell processor that `wallet` made with the factory? */
+  async isDespellProcessor(processor: string, wallet: string): Promise<{ readonly ours: boolean; readonly transistors: string }> {
+    const transistors = await this.addressView(processor, SELECTOR.transistors);
+    const [creator, circuits, name] = await Promise.all([
+      this.addressView(transistors, SELECTOR.creator),
+      this.addressView(transistors, SELECTOR.circuits),
+      this.stringView(processor, SELECTOR.name),
+    ]);
+    const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+    return { ours: same(creator, wallet) && same(circuits, processor) && name === DESPELL_PROCESSOR_NAME, transistors };
+  }
+
+  /** The newest DeSpell processor `wallet` made, searching the factory's whole list from the end; null if none. */
+  async findDespellProcessor(wallet: string): Promise<{ readonly processor: string; readonly transistors: string } | null> {
+    const count = await this.uintView(TAPEOUT_FACTORY, SELECTOR.cpuCount);
+    for (let i = count; i > 0n; i--) {
+      const processor = await this.addressView(TAPEOUT_FACTORY, SELECTOR.cpus + word(i - 1n));
+      const { ours, transistors } = await this.isDespellProcessor(processor, wallet).catch(() => ({ ours: false, transistors: "" }));
+      if (ours) return { processor, transistors };
+    }
+    return null;
+  }
+
+  /** The id of `netlist` on `processor` (ids 1 … nextId()), or null. */
+  async findCircuit(processor: string, netlist: Uint8Array): Promise<number | null> {
+    const last = Number(await this.uintView(processor, SELECTOR.nextId));
+    const wanted = Buffer.from(netlist).toString("hex");
+    for (let id = 1; id <= last; id++) {
+      const stored = await this.netlist(processor, id).catch(() => null);
+      if (stored && Buffer.from(stored).toString("hex") === wanted) return id;
+    }
+    return null;
   }
 }
 

@@ -27,6 +27,7 @@ The circuit is a second, public copy of the judgment. The server stays the one t
 | `scripts/build-circuit.ts` | Builds the netlist, checks it on every input, writes `circuit/pool-judgment.json` and `circuit/pool-judgment-samples.json` |
 | `scripts/check-onchain.ts` | Read-only X Layer checks: fees today, and the byte format against circuits already on chain |
 | `scripts/quote-bem.ts` | Fetches and checks a LI.FI quote for the OKB → BEM swap the tape-out needs (a read; nothing is sent) |
+| `scripts/find-processor.ts` | Finds the DeSpell processor a wallet made and records its address outside the repository, so later runs name it |
 | `scripts/check-tapeout.ts` | After the tape-out: reads the circuit back from X Layer and compares `eval` with the rule function on every sample |
 | `contracts/` | Foundry: the TapeOut interfaces, the tape-out script, a unit test, and fork tests against X Layer mainnet |
 
@@ -34,7 +35,7 @@ This folder is one package of the repository's pnpm workspace, so `pnpm install`
 
 ```bash
 pnpm install              # at the repository root
-pnpm test                 # 36 tests, including the 2^27 comparison (about 16 s on 12 threads)
+pnpm test                 # 37 tests, including the 2^27 comparison (about 16 s on 12 threads)
 pnpm typecheck
 pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
 pnpm check:circuit        # fail if the committed netlist or samples are out of date
@@ -201,9 +202,9 @@ The circuit goes on a DeSpell processor of its own, so the processor address in 
 | Make the DeSpell processor with the TapeOut factory | `createProcessor()` | 2 (exact BEM approval, `createCPU`) | 0.1 BEM |
 | Buy 157 NAND transistors and tape the circuit out, then check `eval` on 64 sample vectors against the rule function | `tapeOutCircuit()` | 3 (exact BEM approval, `mint`, `tapeout`) | 0.01000157 BEM and 0.0013 OKB |
 
-Before the swap the script checks the quote again: the wallet pays and receives, BEM comes out, the minimum received covers the next steps, at most 0.025 OKB goes in, the LI.FI Diamond is the contract called, and the quote is at most 5 minutes old. `tapeOutCircuit()` finds the processor on chain by its creator, after it exists, so no transaction is aimed at an address that only existed in a simulation. A step that is already done is skipped.
+Before the swap the script checks the quote again: the wallet pays, BEM comes out, at most 0.025 OKB goes in, the LI.FI Diamond is the contract called, and the quote is at most 5 minutes old. It reads who receives and the minimum received from the swap calldata itself (words 3 and 4 of LI.FI's native-in swap functions), not only from the quote's fields: on the fork, a quote whose calldata alone pays another address, or alone lowers the minimum, is refused. `tapeOutCircuit()` finds the processor on chain by its creator, after it exists, so no transaction is aimed at an address that only existed in a simulation. Once `scripts/find-processor.ts` has recorded the address, later runs pass it as `DESPELL_PROCESSOR` and the script checks it is ours instead of searching. A step that is already done is skipped, and every approval is used up (the fork test checks both allowances end at 0).
 
-After the tape-out, `node scripts/check-tapeout.ts --processor <address> --id <n>` reads the circuit back and asks X Layer's `eval` for each of the 64 samples, one line per sample, and fails on any difference from the rule function. A server asks the chain the same way:
+After the tape-out, `node scripts/check-tapeout.ts --processor <address>` finds the circuit by its netlist, reads it back and asks X Layer's `eval` for each of the 64 samples, one line per sample, and fails on any difference from the rule function. A server asks the chain the same way:
 
 ```ts
 import { judgeOnChain, XLayerReader } from "./src/onchain.ts";
