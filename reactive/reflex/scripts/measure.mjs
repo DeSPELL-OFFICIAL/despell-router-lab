@@ -36,6 +36,7 @@ const OWNER = "0x8da5cb5b"; // owner()
 const GUARD_OF = "0x7ceab3b1"; // guard()
 const DEBT = "0x9b6c56ec"; // debt(address)
 const RESERVES = "0xd66bd524"; // reserves(address)
+const CALLBACK_SENDER = "0x1dc18e11"; // _CALLBACK_SENDER()
 const CALLBACK_PROXY = "0x476F44b11F5C942c58f4c8E3d0300E5710743585"; // Reactive's callback proxy on Base Sepolia
 const SYSTEM = "0x8888888888888888888888888888888888888888"; // Reactive's system contract on Lasna
 
@@ -46,6 +47,8 @@ const LATE_TIMEOUT_MS = 120_000;
 const POLL_MS = 1_000;
 // Public RPCs cap eth_getLogs ranges (Base Sepolia at 200 blocks), so every log query walks windows this wide.
 const LOG_WINDOW = 150;
+// Each poll reads the last blocks again, in case the RPC indexed their logs late.
+const LOG_OVERLAP = 25;
 // What one run costs, with room to spare: two Base Sepolia transactions, and one reaction on Lasna (about 0.016 lREACT).
 const ETH_PER_RUN = 20_000_000_000_000n; // 0.00002 ETH
 const LREACT_PER_RUN = 20_000_000_000_000_000n; // 0.02 lREACT
@@ -145,8 +148,8 @@ async function statusNow() {
 }
 
 /**
- * Waits for PoolGuard's Marked or MarkKept for this fee change. Scans forward from `fromBlock`, only ever over blocks it
- * has not read yet, so each poll reads a few new blocks. Returns { found, cursor }: cursor is the next unread block.
+ * Waits for PoolGuard's Marked or MarkKept for this fee change. Scans forward from `fromBlock`: each poll reads the new
+ * blocks plus the last LOG_OVERLAP blocks again. Returns { found, cursor }: cursor is the next unread block.
  */
 async function waitForMark(feeTx, fromBlock, timeoutMs) {
   let cursor = fromBlock;
@@ -154,7 +157,8 @@ async function waitForMark(feeTx, fromBlock, timeoutMs) {
   while (Date.now() - started < timeoutMs) {
     const head = await latest(BASE_RPC);
     if (head >= cursor) {
-      const hits = await logsRange(BASE_RPC, GUARD, [[MARKED, MARK_KEPT], POOL_ID, feeTx], cursor, head);
+      const from = Math.max(fromBlock, cursor - LOG_OVERLAP);
+      const hits = await logsRange(BASE_RPC, GUARD, [[MARKED, MARK_KEPT], POOL_ID, feeTx], from, head);
       if (hits.length) return { found: { kind: hits[0].topics[0] === MARKED ? "marked" : "kept", log: hits[0] }, cursor };
       cursor = head + 1;
     }
@@ -247,6 +251,8 @@ async function precheck() {
   const problems = [];
   const wired = await addressAt(LASNA_RPC, REFLEX, GUARD_OF);
   if (wired !== GUARD.toLowerCase()) problems.push(`PoolReflex.guard() is ${wired}, not PoolGuard ${GUARD}`);
+  const sender = await addressAt(BASE_RPC, GUARD, CALLBACK_SENDER);
+  if (sender !== REFLEX.toLowerCase()) problems.push(`PoolGuard accepts marks from ${sender}, not PoolReflex ${REFLEX}`);
   const hookOwner = await addressAt(BASE_RPC, HOOK, OWNER);
   const guardOwner = await addressAt(BASE_RPC, GUARD, OWNER);
   if (hookOwner !== guardOwner) problems.push("the hook and PoolGuard have different owners; one key must change fees and reopen");
