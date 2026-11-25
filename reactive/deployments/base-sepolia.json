@@ -1,0 +1,95 @@
+{
+  "chainId": 84532,
+  "network": "Base Sepolia",
+  "explorer": "https://sepolia.basescan.org",
+  "uniswapV4": {
+    "source": "https://docs.uniswap.org/contracts/v4/deployments",
+    "poolManager": "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408",
+    "positionManager": "0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80",
+    "stateView": "0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4",
+    "quoter": "0x5e6B8B8AFA7e5CEF6C09dd2A67aBA9FB12C75623",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+  },
+  "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  "hook": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000",
+  "hookContract": "DynamicFeeHook",
+  "hookSalt": "0x0000000000000000000000000000000000000000000000000000000000000724",
+  "hookCreate2Deployer": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+  "hookInitialFee": 500,
+  "poolId": "0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4",
+  "poolKey": {
+    "currency0": "0x0000000000000000000000000000000000000000",
+    "currency1": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "fee": 8388608,
+    "tickSpacing": 10,
+    "hooks": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000"
+  },
+  "startTick": -202230,
+  "startSqrtPriceX96": "3219070467509218233123725",
+  "feeEvent": {
+    "signature": "FeeUpdated(bytes32,uint24,uint24)",
+    "topic0": "0x96a011a1e8a72dbc16d5af5d8f0db6bf107a76580682a94073bb6ffec86a0872",
+    "indexed": [
+      "poolId"
+    ],
+    "data": [
+      "uint24 oldFee",
+      "uint24 newFee"
+    ],
+    "emitter": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000"
+  },
+  "positions": [
+    {
+      "tokenId": 34377,
+      "ethWei": "10000000000000000",
+      "tickLower": -202230,
+      "tickUpper": -202030,
+      "tx": "0xeda4ebee75eb55c7f2b0ed418e6b65920d6b6c3a6bd910290cbe11efb0e38c2a"
+    },
+    {
+      "tokenId": 34378,
+      "ethWei": "30000000000000000",
+      "tickLower": -202230,
+      "tickUpper": -202030,
+      "tx": "0x62df50912f566327829050968563ad44a4757799e4c9b281d08e5a263f61646b"
+    }
+  ],
+  "transactions": [
+    {
+      "step": "deploy hook (CREATE2)",
+      "hash": "0xb09a10fe4f094246a22c69f3fbea39eca1a02ffea5f2ca81f6a1c2f348e7b6f0",
+      "block": 63531658,
+      "timestamp": 1795628200
+    },
+    {
+      "step": "initialize pool, FeeUpdated 0 -> 500",
+      "hash": "0xc2b897a63af74cf982ebf0fdd3dc6e7bfac0cc12359a0577bda548588c6d6251",
+      "block": 63531662,
+      "timestamp": 1795628201
+    },
+    {
+      "step": "seed 0.01 ETH (position 34377)",
+      "hash": "0xeda4ebee75eb55c7f2b0ed418e6b65920d6b6c3a6bd910290cbe11efb0e38c2a",
+      "block": 63531666,
+      "timestamp": 1795628202
+    },
+    {
+      "step": "setFee, FeeUpdated 500 -> 100000",
+      "hash": "0xb96244b8cd9fc54ac2b4c852c0f912e94ea4ba4cbb1a79259c857e85ceb8d474",
+      "block": 63531756,
+      "timestamp": 1795628220
+    },
+    {
+      "step": "seed 0.03 ETH (position 34378)",
+      "hash": "0x62df50912f566327829050968563ad44a4757799e4c9b281d08e5a263f61646b",
+      "block": 63534168,
+      "timestamp": 1795628702
+    },
+    {
+      "step": "setFee, FeeUpdated 100000 -> 500",
+      "hash": "0xe784190b659e50a9bc191c5d21b0e33c546c5dca88ccb4d120a400f7cdb8f38d",
+      "block": 63534286,
+      "timestamp": 1795628726
+    }
+  ]
+}
