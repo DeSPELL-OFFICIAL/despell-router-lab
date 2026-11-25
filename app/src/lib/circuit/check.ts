@@ -1,0 +1,68 @@
+import type { Judgment } from "@despell-lab/xlayer/src/rule.ts";
+import type { ContestGate } from "@/lib/swap/view";
+import type { CircuitDeployment } from "./circuit";
+import type { ServerJudgment } from "./server-judgment";
+
+/*
+  The card's check against the pool judgment circuit: the server's judgment
+  of the pool compared with the circuit's answer from X Layer for the same
+  input bits. A difference holds the card. While the circuit is being asked
+  the card is pending, so the button stays off.
+
+  Defaults, to be confirmed (DES-704): with no circuit taped out yet, or when
+  X Layer cannot be reached, nothing is compared and the card is not held.
+  The server's judgment is the one that decides; the circuit is a second,
+  public copy.
+*/
+
+export type CircuitCheck =
+  /** The server has no judgment of this pool: no circuit line. */
+  | { kind: "none" }
+  | { kind: "not-deployed"; server: ServerJudgment }
+  | { kind: "checking"; server: ServerJudgment; deployment: CircuitDeployment }
+  | { kind: "same"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
+  | { kind: "differs"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
+  | { kind: "unreachable"; server: ServerJudgment; deployment: CircuitDeployment; reason: string };
+
+export function sameJudgment(a: Judgment, b: Judgment): boolean {
+  return a.stage === b.stage && a.lane === b.lane;
+}
+
+export const MISMATCH_TITLE = "Judgment differs from the circuit";
+
+const show = (j: Judgment) => `${j.stage}, ${j.lane} lane`;
+
+/** The card's gate for this check. Only a compared and equal judgment, or nothing to compare, leaves it open. */
+export function circuitGate(check: CircuitCheck): ContestGate {
+  switch (check.kind) {
+    case "checking":
+      return { state: "pending", label: "the pool judgment circuit" };
+    case "differs":
+      return { state: "hold", title: MISMATCH_TITLE, items: `· server: ${show(check.server.judgment)} · circuit: ${show(check.circuit)}` };
+    case "none":
+    case "not-deployed":
+    case "same":
+    case "unreachable":
+      return { state: "ok" };
+  }
+}
+
+export type CircuitLine = { circuit: string; status: string; tone: "ok" | "stop" | "plain" };
+
+/** The one line the card's check box shows, or null for no line. */
+export function circuitLine(check: CircuitCheck): CircuitLine | null {
+  switch (check.kind) {
+    case "none":
+      return null;
+    case "not-deployed":
+      return { circuit: "Pool judgment circuit", status: "being prepared", tone: "plain" };
+    case "checking":
+      return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "checking", tone: "plain" };
+    case "same":
+      return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "same judgment", tone: "ok" };
+    case "differs":
+      return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "differs", tone: "stop" };
+    case "unreachable":
+      return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "not reached", tone: "plain" };
+  }
+}
