@@ -18,8 +18,9 @@ export const short = (address: Address) => `${address.slice(0, 6)}…${address.s
 /** Hundredths of a bip to percent: 500 -> "0.05%". */
 export const fmtFee = (fee: number) => `${trimDecimal((fee / 10_000).toFixed(4), 4)}%`;
 
-/** Unix seconds to "HH:MM UTC", the same on server and client. */
+/** Unix seconds to "YYYY-MM-DD HH:MM UTC", the same on server and client. The date is always shown. */
 export function fmtTime(unixSec: number): string {
   const d = new Date(unixSec * 1000);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")} UTC`;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
 }

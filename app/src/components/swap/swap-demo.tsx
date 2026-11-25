@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { BASE_SEPOLIA, GIWA_SEPOLIA } from "@/lib/swap/chains";
+import { NO_CONTEST_CHECK } from "@/lib/swap/view";
 import { SwapCard } from "./swap-card";
 
 /** Demo amount decided for DES-697: one Circle faucet drip is 20 USDC. */
@@ -24,8 +25,9 @@ export function SwapDemo() {
       </div>
       {picked && (
         <div className="lab-swap-grid">
-          <SwapCard chain={BASE_SEPOLIA} amountIn={DEMO_USDC} onCancel={close} onBusyChange={onBaseBusy} />
-          <SwapCard chain={GIWA_SEPOLIA} amountIn={DEMO_USDC} onCancel={close} onBusyChange={onGiwaBusy} />
+          {/* This page has no contest check of its own; contest pages pass their gate here instead. */}
+          <SwapCard chain={BASE_SEPOLIA} amountIn={DEMO_USDC} gate={NO_CONTEST_CHECK} onCancel={close} onBusyChange={onBaseBusy} />
+          <SwapCard chain={GIWA_SEPOLIA} amountIn={DEMO_USDC} gate={NO_CONTEST_CHECK} onCancel={close} onBusyChange={onGiwaBusy} />
         </div>
       )}
     </section>

@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { SignCard } from "@/components/sign-card/sign-card";
 import type { SwapChain } from "@/lib/swap/chains";
-import { cardView, type Hold } from "@/lib/swap/view";
+import { cardView, type ContestGate } from "@/lib/swap/view";
 import { TestUsdcHelp } from "./test-usdc-help";
 import { useSwap } from "./use-swap";
 
@@ -13,8 +13,11 @@ export type SwapCardProps = {
   amountIn: bigint;
   /** A contest's own rows, after the cost row (e.g. "Pools left out", "Circuit #7"). */
   extraRows?: ReactNode;
-  /** A contest's reason to stop signing; turns the check box to stop and the sign button off. */
-  hold?: Hold | null;
+  /**
+   * The contest's own check, required so a page cannot forget it: "pending" while it runs, "hold" to
+   * stop, "ok" to allow. Only "ok" lets the sign button turn on. Pages with no check pass NO_CONTEST_CHECK.
+   */
+  gate: ContestGate;
   /** Cancel closes the card. Leave it out while another card is signing. */
   onCancel?: () => void;
   /** Told when this card starts and stops signing, so the page can keep other controls still. */
@@ -22,11 +25,12 @@ export type SwapCardProps = {
 };
 
 /** A live USDC -> ETH signing card on one test network. */
-export function SwapCard({ chain, amountIn, extraRows, hold, onCancel, onBusyChange }: SwapCardProps) {
-  const swap = useSwap(chain, amountIn, hold);
+export function SwapCard({ chain, amountIn, extraRows, gate, onCancel, onBusyChange }: SwapCardProps) {
+  const swap = useSwap(chain, amountIn, gate);
+  const phaseKind = swap.state.phase.kind;
   useEffect(() => {
-    onBusyChange?.(swap.busy && swap.state.phase.kind === "signing");
-  }, [swap.busy, swap.state.phase.kind, onBusyChange]);
+    onBusyChange?.(phaseKind === "signing" || phaseKind === "unconfirmed");
+  }, [phaseKind, onBusyChange]);
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const view = cardView(swap.state);
   const phase = swap.state.phase.kind;
@@ -54,16 +58,20 @@ export function SwapCard({ chain, amountIn, extraRows, hold, onCancel, onBusyCha
         onCancel={stuck ? swap.reset : view.busy ? undefined : onCancel}
         outcome={swap.outcome}
         notice={
-          stuck && swap.failedTx ? (
-            <>
-              The transaction reverted.{" "}
-              <a href={swap.failedTx} target="_blank" rel="noreferrer">
-                See it on the explorer
-              </a>
-            </>
-          ) : (
-            swap.notice
-          )
+          swap.notice || swap.txLink ? (
+            <span>
+              {stuck ? "The transaction reverted. " : null}
+              {swap.notice}
+              {swap.txLink ? (
+                <>
+                  {" "}
+                  <a href={swap.txLink} target="_blank" rel="noreferrer">
+                    See it on the explorer
+                  </a>
+                </>
+              ) : null}
+            </span>
+          ) : null
         }
       />
       <TestUsdcHelp chain={chain} amountIn={amountIn} usdc={swap.state.balances?.usdc ?? null} />

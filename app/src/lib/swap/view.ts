@@ -1,7 +1,7 @@
 import { isAddressEqual, type Address, type Hex } from "viem";
 import type { Amount, CardCheck, CostItem, SignGate } from "@/components/sign-card/sign-card";
 import type { SwapChain } from "./chains";
-import { decodePlan, type DecodedPlan, type DecodedStep } from "./decode";
+import { decodePlan, decodeStep, type DecodedPlan, type DecodedStep } from "./decode";
 import { fmtEth, fmtFee, fmtTime, fmtUsdc, short } from "./format";
 import { minOutFor, type Quote, type SwapPlan } from "./plan";
 import type { Simulation } from "./read";
@@ -19,11 +19,28 @@ export type Phase =
   | { kind: "idle" }
   | { kind: "signing"; step: number; total: number; waiting: "simulating" | "wallet" | "chain" }
   | { kind: "blocked"; reason: string }
+  /** The wallet returned a hash but its receipt could not be read (RPC error, timeout). Nothing new may be signed. */
+  | { kind: "unconfirmed"; step: number; total: number; hash: Hex; nonce: number | null }
   | { kind: "done"; hash: Hex; received: bigint | null; block: bigint }
   | { kind: "failed"; hash: Hex | null; reason: string };
 
-/** A contest's reason to stop this card from signing (a held pool, a circuit that disagrees). */
-export type Hold = { title: string; items?: string };
+/**
+  A contest's own check on this card (a pool left out, a circuit that must
+  agree with the server, a held card). Fail-closed: a page passes "pending"
+  while its check runs, and only "ok" lets the sign button turn on. A page
+  with no check of its own passes NO_CONTEST_CHECK explicitly.
+*/
+export type ContestGate =
+  | { state: "ok" }
+  | { state: "pending"; label: string }
+  | { state: "hold"; title: string; items?: string };
+
+export const NO_CONTEST_CHECK: ContestGate = { state: "ok" };
+
+/** Why a contest gate stops signing, or null when it allows it. */
+export function gateStopReason(gate: ContestGate): string | null {
+  return gate.state === "ok" ? null : gate.state === "pending" ? `waiting for ${gate.label}` : `held: ${gate.title}`;
+}
 
 export type CardState = {
   chain: SwapChain;
@@ -40,7 +57,7 @@ export type CardState = {
   /** Latest simulation; only counts when its planId is the plan's id. */
   simulation: Simulation | null;
   phase: Phase;
-  hold?: Hold | null;
+  gate: ContestGate;
 };
 
 export type CardView = {
@@ -86,6 +103,17 @@ export function describeStep(chain: SwapChain, step: DecodedStep, account: Addre
   }
 }
 
+/**
+ * The approvals among a plan's first `confirmed` transactions, one line each: what stays approved
+ * when signing stops part-way. The next plan reads these allowances and skips those steps.
+ */
+export function confirmedApprovals(chain: SwapChain, plan: SwapPlan, confirmed: number): string[] {
+  return plan.steps
+    .slice(0, confirmed)
+    .filter((s) => s.kind !== "swap")
+    .map((s) => describeStep(chain, decodeStep(chain, s), plan.account));
+}
+
 /** The simulation of the plan on screen. The sign gate additionally treats a stale plan as pending. */
 function simulationState(state: CardState): SignGate["simulation"] {
   if (!state.plan) return "none";
@@ -96,8 +124,15 @@ function simulationState(state: CardState): SignGate["simulation"] {
 }
 
 function check(state: CardState, decoded: DecodedPlan | null, decodeError: string | null, sim: SignGate["simulation"]): CardCheck {
-  const { chain, plan, account, balances, phase, hold, quote, quoteError } = state;
-  if (hold) return { tone: "stop", title: hold.title, items: hold.items };
+  const { chain, plan, account, balances, phase, gate, quote, quoteError } = state;
+  if (gate.state === "hold") return { tone: "stop", title: gate.title, items: gate.items };
+  if (phase.kind === "unconfirmed") {
+    return {
+      tone: "stop",
+      title: "Sent, not confirmed yet",
+      items: `· transaction ${phase.step + 1} of ${phase.total} · ${phase.hash.slice(0, 10)}… · check it before signing anything else`,
+    };
+  }
   if (phase.kind === "failed") return { tone: "stop", title: "Transaction failed", items: `· ${phase.reason}` };
   if (phase.kind === "blocked") return { tone: "stop", title: "Stopped before signing", items: `· ${phase.reason}` };
   if (decodeError) return { tone: "stop", title: "These transactions do not match the card", items: `· ${decodeError}` };
@@ -120,6 +155,7 @@ function check(state: CardState, decoded: DecodedPlan | null, decodeError: strin
   if (simResult?.ok && simResult.planId === plan.id) {
     detail.push(["Simulated", `−${fmtUsdc(-simResult.usdcDelta)} USDC · +${fmtEth(simResult.ethDelta)} ETH · block ${simResult.block}`]);
   }
+  if (gate.state === "pending") return { tone: "plain", title: `Waiting for ${gate.label}`, detail };
   if (sim === "pending") return { tone: "plain", title: "Simulating your transactions…", detail };
   if (sim === "failed" && simResult && !simResult.ok) return { tone: "stop", title: "Simulation failed", items: `· ${simResult.reason}`, detail };
   if (simResult?.ok && balances && balances.eth < simResult.gas * simResult.gasPrice) {
@@ -192,7 +228,9 @@ export function cardView(state: CardState): CardView {
       ? { text: `Sign ${phase.step + 1}/${phase.total}`, accent: true }
       : phase.kind === "done"
         ? { text: "Received", accent: true }
-        : { text: "Test network", accent: false };
+        : phase.kind === "unconfirmed"
+          ? { text: "Not confirmed", accent: false }
+          : { text: "Test network", accent: false };
 
   return {
     title: "USDC → ETH",
@@ -205,7 +243,7 @@ export function cardView(state: CardState): CardView {
     check: check(state, decoded, decodeError, sim),
     signLabel,
     simulation: sim === "passed" && state.stale ? "pending" : sim,
-    busy: phase.kind === "signing",
+    busy: phase.kind === "signing" || phase.kind === "unconfirmed",
     decoded,
   };
 }

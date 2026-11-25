@@ -15,7 +15,7 @@ import { BASE_SEPOLIA, GIWA_SEPOLIA, targets, type SwapChain } from "./chains";
 import { fmtEth, fmtUsdc, short } from "./format";
 import { buildPlan, type Quote, type SwapPlan, type WalletState } from "./plan";
 import type { Simulation } from "./read";
-import { cardView, type CardState } from "./view";
+import { cardView, confirmedApprovals, NO_CONTEST_CHECK, type CardState } from "./view";
 import { canSign } from "@/components/sign-card/sign-card";
 
 /*
@@ -108,6 +108,7 @@ function stateFor(chain: SwapChain, plan: SwapPlan, simulation: Simulation | nul
     plan,
     simulation,
     phase: { kind: "idle" },
+    gate: NO_CONTEST_CHECK,
   };
 }
 
@@ -163,8 +164,32 @@ describe.each([
     const failed = cardView(stateFor(chain, plan, { ok: false, planId: plan.id, block: 1n, reason: "Step 2 of 2 (swap) would revert" }));
     expect(failed.simulation).toBe("failed");
     expect(failed.check.tone).toBe("stop");
-    const held = cardView({ ...stateFor(chain, plan), hold: { title: "Pool held", items: "· its fee changed" } });
+    const held = cardView({ ...stateFor(chain, plan), gate: { state: "hold", title: "Pool held", items: "· its fee changed" } });
     expect(held.check.tone).toBe("stop");
+    expect(canSign({ ...held, sign: { simulation: held.simulation, onSign: () => {} } })).toBe(false);
+  });
+
+  it("keeps the button off while a contest check is still running (fail-closed)", () => {
+    const pending = cardView({ ...stateFor(chain, plan), gate: { state: "pending", label: "the circuit to agree with the server" } });
+    expect(pending.check).toMatchObject({ tone: "plain", title: "Waiting for the circuit to agree with the server" });
+    expect(canSign({ ...pending, sign: { simulation: pending.simulation, onSign: () => {} } })).toBe(false);
+  });
+
+  it("blocks new signatures while a sent transaction is unconfirmed", () => {
+    const v = cardView({ ...stateFor(chain, plan), phase: { kind: "unconfirmed", step: plan.steps.length - 1, total: plan.steps.length, hash: `0x${"cd".repeat(32)}`, nonce: 7 } });
+    expect(v.check).toMatchObject({ tone: "stop", title: "Sent, not confirmed yet" });
+    expect(v.busy).toBe(true);
+    expect(canSign({ ...v, sign: { simulation: v.simulation, busy: v.busy, onSign: () => {} } })).toBe(false);
+  });
+
+  it("names what stays approved when signing stops after the approvals", () => {
+    const lines = confirmedApprovals(chain, plan, plan.steps.length - 1);
+    expect(lines).toHaveLength(signed.approvals.length);
+    signed.approvals.forEach((a, i) => {
+      expect(lines[i]).toContain(short(a.spender));
+      expect(lines[i]).toContain(`${fmtUsdc(a.amount)} USDC`);
+    });
+    expect(confirmedApprovals(chain, plan, 0)).toEqual([]);
   });
 
   it("skips approvals the wallet already gave and never raises them", () => {
@@ -231,6 +256,27 @@ describe.each([
   });
 });
 
+describe("Permit2 allowance window", () => {
+  const plan = buildPlan({ chain: BASE_SEPOLIA, quote: quoteFor(BASE_SEPOLIA, 6_000_000_000_000_000n), wallet: freshWallet, nowSec: NOW });
+
+  // The fifth forged plan: the allowance may not outlive the swap by more than 30 minutes.
+  it("refuses a Permit2 allowance that lasts long past the swap", () => {
+    const i = plan.steps.findIndex((s) => s.kind === "permit2-approve");
+    const longLived = encodeFunctionData({ abi: PERMIT2, functionName: "approve", args: [BASE_SEPOLIA.usdc.address, BASE_SEPOLIA.universalRouter, AMOUNT, plan.deadline + 365 * 24 * 3600] });
+    const tampered: SwapPlan = { ...plan, steps: plan.steps.map((s, j) => (j === i ? { ...s, tx: { ...s.tx, data: longLived } } : s)) };
+    const v = cardView(stateFor(BASE_SEPOLIA, tampered));
+    expect(v.check.tone).toBe("stop");
+    expect(v.check.items).toContain("Permit2 allowance lasts until");
+    expect(canSign({ ...v, sign: { simulation: v.simulation, onSign: () => {} } })).toBe(false);
+  });
+
+  it("shows the allowance and deadline with their date", () => {
+    const rows = (cardView(stateFor(BASE_SEPOLIA, plan)).check.detail ?? []).map(([, v]) => v);
+    expect(rows.find((r) => r.startsWith("Permit2.approve"))).toMatch(/until \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/u);
+    expect(rows.find((r) => r.startsWith("Universal Router"))).toMatch(/by \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/u);
+  });
+});
+
 describe("buildPlan", () => {
   it("renews a Permit2 allowance that would expire before the deadline, for this amount only", () => {
     const wallet: WalletState = { ...freshWallet, erc20Allowance: AMOUNT, permit2: { amount: AMOUNT, expiration: NOW + 60 } };
@@ -247,7 +293,7 @@ describe("buildPlan", () => {
 
   it("shows the quote's own preview before a wallet is connected", () => {
     const quote = quoteFor(BASE_SEPOLIA, 6_045_433_325_479_375n);
-    const v = cardView({ chain: BASE_SEPOLIA, amountIn: AMOUNT, quote, quoteError: null, account: null, balances: null, plan: null, simulation: null, phase: { kind: "idle" } });
+    const v = cardView({ chain: BASE_SEPOLIA, amountIn: AMOUNT, quote, quoteError: null, account: null, balances: null, plan: null, simulation: null, phase: { kind: "idle" }, gate: NO_CONTEST_CHECK });
     expect(v.sends?.amount).toBe("−10");
     expect(v.receives?.amount).toBe("+0.00604543");
     expect(v.simulation).toBe("none");

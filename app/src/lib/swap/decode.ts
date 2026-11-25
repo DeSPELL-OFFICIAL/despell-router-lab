@@ -1,7 +1,7 @@
 import { decodeAbiParameters, decodeFunctionData, getAddress, isAddressEqual, numberToHex, type Address, type Hex } from "viem";
 import { erc20Abi, permit2Abi, swapRouter02Abi, universalRouterAbi, v4ExactInSingle, v4SettleAll, v4SwapInput, v4Take } from "./abi";
 import type { SwapChain } from "./chains";
-import { ACTION, ROUTER_KEEPS_OUTPUT, V4_SWAP, type Step } from "./plan";
+import { ACTION, PERMIT2_EXPIRY_SECONDS, ROUTER_KEEPS_OUTPUT, V4_SWAP, type Step } from "./plan";
 
 /*
   Reads a plan's transactions back from their bytes. The card shows only what
@@ -139,6 +139,8 @@ export function decodePlan(chain: SwapChain, steps: readonly Step[]): DecodedPla
       same(d.token, swap.tokenIn, "Permit2 token");
       same(d.spender, chain.universalRouter, "Permit2 spender");
       if (d.amount !== swap.amountIn) fail(`Permit2 allowance of ${d.amount}, swap of ${swap.amountIn}`);
+      // The allowance must not outlive the swap by more than the window plan.ts gives it.
+      if (d.expiration > swap.deadline + PERMIT2_EXPIRY_SECONDS) fail(`Permit2 allowance lasts until ${d.expiration}, past the swap deadline ${swap.deadline} + ${PERMIT2_EXPIRY_SECONDS}s`);
     }
   }
   return { steps: decoded, swap };
