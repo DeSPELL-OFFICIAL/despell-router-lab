@@ -10,6 +10,9 @@ importers:
 
   app:
     dependencies:
+      '@despell-lab/reactive':
+        specifier: workspace:*
+        version: link:../reactive
       '@tanstack/react-query':
         specifier: 5.107.1
         version: 5.107.1(@types/react@19.3.3)(react@19.3.1)
@@ -59,6 +62,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  reactive: {}
 
   xlayer:
     devDependencies:

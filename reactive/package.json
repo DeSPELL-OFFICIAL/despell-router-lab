@@ -1,0 +1,19 @@
+{
+  "name": "@despell-lab/reactive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reactive Omni: the test pool's fee hook, PoolReflex and PoolGuard, and the measured on-chain reflex the app shows.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "exports": {
+    "./reflex-page.json": "./deployments/reflex-page.json",
+    "./reflex.json": "./deployments/reflex.json",
+    "./base-sepolia.json": "./deployments/base-sepolia.json"
+  },
+  "scripts": {
+    "test": "node --test \"reflex/scripts/*.test.mjs\""
+  }
+}
