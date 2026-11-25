@@ -40,11 +40,16 @@ Rows that cannot be ranked are kept and listed last, with the reason:
 
 ## Use
 
-Node 24 runs the TypeScript directly; there are no runtime dependencies. TypeScript is a dev dependency, only for `pnpm typecheck`.
+`cmc/` is a package of the root pnpm workspace (`@despell-lab/cmc`). Node 24 runs the TypeScript directly; there are no runtime dependencies. TypeScript is a dev dependency, only for type checking. The root `pnpm verify` runs this package's typecheck and tests with the rest.
 
 ```bash
-pnpm install && pnpm test && pnpm typecheck # fixtures only, no network
-CMC_PRO_API_KEY=... pnpm compare NVDA       # live: CoinMarketCap + LI.FI
+# from the repository root
+pnpm install --frozen-lockfile
+pnpm --filter @despell-lab/cmc test        # fixtures only, no network
+pnpm --filter @despell-lab/cmc typecheck
+
+# live: CoinMarketCap + LI.FI (from cmc/)
+CMC_PRO_API_KEY=... pnpm compare NVDA
 node --env-file=<a file outside this repo> scripts/compare-live.ts NVDA --max-premium 2 --json out.json
 ```
 
