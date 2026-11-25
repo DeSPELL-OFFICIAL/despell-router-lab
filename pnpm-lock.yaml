@@ -10,6 +10,9 @@ importers:
 
   app:
     dependencies:
+      '@despell-lab/cmc':
+        specifier: workspace:*
+        version: link:../cmc
       '@despell-lab/reactive':
         specifier: workspace:*
         version: link:../reactive

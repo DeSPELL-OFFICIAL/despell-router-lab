@@ -157,3 +157,17 @@ test("bad inputs are refused", () => {
   assert.throws(() => rank([], [], { maxPremiumPct: 50 }));
   assert.throws(() => rank([], [], { tieUsd: -1 }));
 });
+
+test("only rows that could have been best are marked tied with it", () => {
+  // Best receives $99.00. Cheap receives $98.97 (within $0.05) but pays 1.38%
+  // below the stock, so it could never be best. Close receives $98.97 at par.
+  const { rows } = rank(
+    [wrapper("Best", 100), wrapper("Cheap", 100), wrapper("Close", 100)],
+    [quoted(0.99, 0), quoted(1.014, 2.43), quoted(0.9897, 0)],
+  );
+  const by = (s: string) => rows.find((r) => r.wrapper.symbol === s)!;
+  assert.equal(by("Best").best, true);
+  assert.ok(Math.abs(by("Cheap").receivedValueUsd! - by("Best").receivedValueUsd!) <= 0.05);
+  assert.equal(by("Cheap").tiedWithBest, false);
+  assert.equal(by("Close").tiedWithBest, true);
+});

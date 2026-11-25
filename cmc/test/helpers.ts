@@ -31,3 +31,19 @@ export function fakeFetch(routes: Record<string, { status?: number; body: unknow
   }) as typeof fetch;
   return { fetch: impl, seen };
 }
+
+/** prepare_swap answer from the production connector (handoff id replaced). */
+export const prepareSwapNvdac = () => load<Record<string, unknown> & { trades: Record<string, unknown>[] }>("despell-prepare-swap-nvdac-base.json");
+
+/** A fake MCP connector endpoint: answers tools/call with the given tool results, as SSE like the real one. */
+export function fakeConnector(answer: (tool: string, args: Record<string, unknown>) => unknown) {
+  const calls: { tool: string; args: Record<string, unknown> }[] = [];
+  const impl = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const req = JSON.parse(String(init?.body)) as { id: number; params: { name: string; arguments: Record<string, unknown> } };
+    calls.push({ tool: req.params.name, args: req.params.arguments });
+    const result = answer(req.params.name, req.params.arguments);
+    const msg = { jsonrpc: "2.0", id: req.id, result: { content: [{ type: "text", text: JSON.stringify(result) }] } };
+    return new Response(`event: message\ndata: ${JSON.stringify(msg)}\n\n`, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }) as typeof fetch;
+  return { fetch: impl, calls };
+}

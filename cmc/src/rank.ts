@@ -163,18 +163,19 @@ export function rankWrappers(input: RankInput): RankOutput {
     // A failed quote might have been the winner; do not crown anyone.
     if (ranked[0]) ranked[0].bestBlocked = "ranking_incomplete";
   } else {
+    const blockedFor = (r: RankedWrapper): BestBlocked | null =>
+      r.premiumPct! < -BEST_MAX_DISCOUNT_PCT ? "discount_over_1pct" : r.receivedValueUsd! > spendUsd ? "receives_more_than_spent" : null;
     for (const r of ranked) {
-      if (r.premiumPct! < -BEST_MAX_DISCOUNT_PCT) {
-        r.bestBlocked = "discount_over_1pct";
-        continue;
-      }
-      if (r.receivedValueUsd! > spendUsd) {
-        r.bestBlocked = "receives_more_than_spent";
+      const blocked = blockedFor(r);
+      if (blocked) {
+        r.bestBlocked = blocked;
         continue;
       }
       r.best = true;
+      // Only rows that could have been best themselves are tied with it.
       for (const other of ranked) {
-        if (other !== r && Math.abs(other.receivedValueUsd! - r.receivedValueUsd!) <= tieUsd) other.tiedWithBest = true;
+        if (other === r || blockedFor(other)) continue;
+        if (Math.abs(other.receivedValueUsd! - r.receivedValueUsd!) <= tieUsd) other.tiedWithBest = true;
       }
       break;
     }

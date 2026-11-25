@@ -11,3 +11,16 @@ export type { RankedWrapper, RankOutput, QuoteOutcome, Unavailable, BestBlocked 
 export { compareWrappers, MAX_SPEND_USD } from "./compare.ts";
 export type { CompareOptions, CompareResult } from "./compare.ts";
 export { formatTable } from "./format.ts";
+export {
+  createDespellConnector,
+  checkBuyable,
+  prepareWrapperBuy,
+  checkHandoffUrl,
+  DespellConnectorError,
+  DEFAULT_DESPELL_MCP_URL,
+} from "./despell.ts";
+export type { DespellConnector, Buyability, WrapperBuyRequest, WrapperBuyLink } from "./despell.ts";
+export { buildWrapperScreen, rowKey } from "./view.ts";
+export type { WrapperScreen, RowView, FoldedRowView, Badge, BuyState, NoBestReason } from "./view.ts";
+export { loadWrapperScreen } from "./screen.ts";
+export type { LoadScreenOptions } from "./screen.ts";
