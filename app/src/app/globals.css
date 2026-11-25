@@ -79,8 +79,8 @@ code { font-family: var(--ds-font-mono); font-size: 0.92em; }
   .lab-themes { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
-  .lab-header { padding: 0 16px; gap: 12px; }
-  .lab-nav { display: none; }
+  .lab-header { flex-wrap: wrap; height: auto; padding: 10px 16px 6px; gap: 6px 12px; }
+  .lab-nav { order: 3; flex-basis: 100%; margin: 0 -10px; }
   .lab-main { padding: 32px 16px 64px; }
   .lab-tiles { grid-template-columns: minmax(0, 1fr); }
 }

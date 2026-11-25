@@ -27,7 +27,7 @@
 .ds-btn.is-primary:hover { background: var(--ds-accent); box-shadow: var(--ds-accent-glow); filter: brightness(1.05); }
 .ds-btn.is-secondary { background: transparent; }
 .ds-btn:disabled, .ds-btn[aria-disabled="true"] { opacity: 0.5; cursor: default; box-shadow: none; filter: none; transform: none; }
-.ds-btn:focus-visible, .ds-cost-toggle:focus-visible, .ds-sum-toggle:focus-visible { outline: 2px solid var(--ds-accent-ink); outline-offset: 2px; }
+.ds-btn:focus-visible, .ds-cost > summary:focus-visible, .ds-sum > summary:focus-visible { outline: 2px solid var(--ds-accent-ink); outline-offset: 2px; }
 
 /* status pill */
 .ds-status { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--ds-r-pill); border: 1px solid var(--ds-line-4); font-size: 11px; font-weight: var(--ds-weight-semibold); color: var(--ds-fg-dim); white-space: nowrap; line-height: 1.4; }
@@ -62,7 +62,7 @@
 .ds-skel { display: inline-block; height: 10px; border-radius: 4px; background: var(--ds-line-2); }
 
 /* cost fold (native details) */
-.ds-cost > summary { list-style: none; }
+.ds-cost > summary { list-style: none; cursor: pointer; border-radius: var(--ds-r-sm); }
 .ds-cost > summary::-webkit-details-marker { display: none; }
 .ds-cost-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 14px; color: var(--ds-fg); font-variant-numeric: tabular-nums; }
 .ds-cost-toggle svg { color: var(--ds-fg-dim); transition: transform var(--ds-dur-tap) var(--ds-ease-std); }
@@ -73,7 +73,7 @@
 
 /* check box: the one box right above the buttons */
 .ds-sum { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: var(--ds-r-sm); border: 1px solid color-mix(in srgb, var(--ds-accent-ink) 32%, transparent); background: color-mix(in srgb, var(--ds-accent) 7%, transparent); font-size: 12px; }
-.ds-sum > summary { list-style: none; }
+.ds-sum > summary { list-style: none; cursor: pointer; border-radius: var(--ds-r-sm); }
 .ds-sum > summary::-webkit-details-marker { display: none; }
 .ds-sum-head { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; }
 .ds-sum-mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--ds-accent); color: var(--ds-on-accent); font-weight: 700; font-size: 12px; }

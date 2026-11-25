@@ -17,8 +17,12 @@ import { fileURLToPath } from "node:url";
 
 const ALLOW = "secret-scan: allow";
 
-/* 64 hex digits is a private key or a transaction hash. Flag it only when the line says key, secret, seed or mnemonic. */
-const KEYISH = /(priv(ate)?[_ -]?key|secret|mnemonic|seed|signer[_ -]?key|_KEY\b|\bpk\b)/i;
+/*
+  64 hex digits is a private key or a transaction hash. A hash is fine to publish,
+  so a line is flagged when it also mentions a key, wallet, account, signer, seed
+  or secret, or when it builds a wallet from the value.
+*/
+const KEYISH = /(key|secret|mnemonic|seed|signer|wallet|account|\bpk\b|fromPrivate|privateKeyTo)/i;
 const HEX64 = /(?<![0-9a-fA-F])(0x)?[0-9a-fA-F]{64}(?![0-9a-fA-F])/;
 
 const RULES = [
@@ -31,7 +35,7 @@ const RULES = [
   { name: "Google API key", test: (l) => /\bAIza[0-9A-Za-z_-]{35}\b/.test(l) },
   { name: "RPC URL with key", test: (l) => /(alchemy\.com\/v2\/|infura\.io\/v3\/|quiknode\.pro\/|drpc\.org\/[^\s"']*dkey=)[A-Za-z0-9_-]{16,}/.test(l) },
   { name: "database URL with password", test: (l) => /\b(postgres(ql)?|mysql|mongodb(\+srv)?|redis):\/\/[^\s:/@"']+:[^\s@"']+@/.test(l) },
-  { name: "assigned API key", test: (l) => /\b[A-Za-z_]*(api[_-]?key|secret|token|password)\b["']?\s*[:=]\s*["'][A-Za-z0-9_\-+/=]{20,}["']/i.test(l) },
+  { name: "assigned API key", test: (l) => /\b[A-Za-z_]*([A-Za-z][_-]?key|secret|token|password)[A-Za-z0-9_]*["']?\s*[:=]\s*["'][A-Za-z0-9_\-+/=.]{20,}["']/i.test(l) },
 ];
 
 /* Env files: only the example file may be committed, and only with empty values. */
@@ -47,8 +51,9 @@ export function scanText(path, text) {
       return findings;
     }
     text.split("\n").forEach((line, i) => {
-      const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-      if (m && m[2].trim() !== "" && !line.includes(ALLOW)) findings.push({ path, line: i + 1, rule: "value in env example" });
+      if (line.includes(ALLOW) || /^\s*(#|$)/.test(line)) return;
+      const m = /^\s*(export\s+)?([A-Za-z0-9_.-]+)\s*[=:]\s*(.*)$/.exec(line);
+      if (!m || m[3].trim() !== "") findings.push({ path, line: i + 1, rule: "value in env example" });
     });
     return findings;
   }

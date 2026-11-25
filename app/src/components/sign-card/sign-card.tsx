@@ -71,7 +71,7 @@ function FlowRow({ k, value, note }: { k: string; value?: ReactNode; note?: Reac
   return (
     <div className="ds-flow" data-row={k.toLowerCase()}>
       <span className="ds-flow-k">{k}</span>
-      <span className={value === undefined ? "ds-flow-v is-empty" : "ds-flow-v"}>{value ?? <Skeleton width={120} />}</span>
+      <span className={value == null ? "ds-flow-v is-empty" : "ds-flow-v"}>{value ?? <Skeleton width={120} />}</span>
       {note !== undefined && <span className="ds-flow-u">{note}</span>}
     </div>
   );
@@ -153,33 +153,42 @@ const MARK: Record<CheckTone, string> = { ok: "✓", partial: "!", stop: "!", pl
 function CheckBox({ check }: { check?: CardCheck }) {
   const c: CardCheck = check ?? { tone: "plain", title: "Checks run when a quote arrives" };
   const detail = c.detail ?? [];
+  const head = (
+    <>
+      <span className="ds-sum-mark" aria-hidden="true">
+        {MARK[c.tone]}
+      </span>
+      <span className="ds-sum-title">
+        <b>{c.title}</b>
+        {c.items && <span className="items"> {c.items}</span>}
+      </span>
+    </>
+  );
+  // Nothing to reveal: a plain box, so it is not announced as expandable.
+  if (detail.length === 0) {
+    return (
+      <div className={`ds-sum is-${c.tone}`} data-row="check">
+        <div className="ds-sum-head">{head}</div>
+      </div>
+    );
+  }
   return (
     <details className={`ds-sum is-${c.tone}`} data-row="check">
       <summary className="ds-sum-head">
-        <span className="ds-sum-mark" aria-hidden="true">
-          {MARK[c.tone]}
+        {head}
+        <span className="ds-sum-toggle">
+          <span className="when-closed">Details</span>
+          <span className="when-open">Hide</span>
         </span>
-        <span className="ds-sum-title">
-          <b>{c.title}</b>
-          {c.items && <span className="items"> {c.items}</span>}
-        </span>
-        {detail.length > 0 && (
-          <span className="ds-sum-toggle">
-            <span className="when-closed">Details</span>
-            <span className="when-open">Hide</span>
-          </span>
-        )}
       </summary>
-      {detail.length > 0 && (
-        <dl className="ds-sum-detail">
-          {detail.map(([k, v]) => (
-            <div key={k} style={{ display: "contents" }}>
-              <dt>{k}</dt>
-              <dd>{v}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <dl className="ds-sum-detail">
+        {detail.map(([k, v]) => (
+          <div key={k} style={{ display: "contents" }}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
     </details>
   );
 }

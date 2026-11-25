@@ -26,4 +26,16 @@ describe("SignCard", () => {
     );
     expect(rows(html)).toEqual(["sends", "receives", "route", "cost", "circuit", "check", "wallet"]);
   });
+
+  it("uses a plain box, not a disclosure, when the check has no details", () => {
+    const empty = renderToStaticMarkup(<SignCard {...EMPTY_SWAP} />);
+    expect(empty).not.toContain('<details class="ds-sum');
+    expect(empty).toContain('<div class="ds-sum is-plain" data-row="check">');
+    expect(renderToStaticMarkup(<SignCard {...EXAMPLE_SWAP} />)).toContain('<details class="ds-sum is-ok" data-row="check">');
+  });
+
+  it("treats a null route label as empty", () => {
+    const html = renderToStaticMarkup(<SignCard {...EMPTY_SWAP} route={{ label: null }} />);
+    expect(html).toMatch(/data-row="route"><span class="ds-flow-k">Route<\/span><span class="ds-flow-v is-empty">/);
+  });
 });

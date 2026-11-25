@@ -7,8 +7,11 @@ const hex64 = "ab".repeat(32);
 const rules = (path, text) => scanText(path, text).map((f) => f.rule);
 
 test("flags a private key but not a transaction hash", () => {
-  assert.deepEqual(rules("a.ts", `const PRIVATE_KEY = "0x${hex64}";`), ["hex private key"]);
+  assert.ok(rules("a.ts", `const PRIVATE_KEY = "0x${hex64}";`).includes("hex private key"));
   assert.deepEqual(rules("README.md", `Loop tx: 0x${hex64}`), []);
+  assert.ok(rules("deploy.ts", `const account = privateKeyToAccount("0x${hex64}");`).includes("hex private key"));
+  assert.ok(rules("deploy.ts", `const w = new Wallet("0x${hex64}");`).includes("hex private key"));
+  assert.ok(rules("deploy.ts", `deployerKey: "0x${hex64}",`).includes("hex private key"));
 });
 
 test("flags common token shapes", () => {
@@ -17,6 +20,8 @@ test("flags common token shapes", () => {
   assert.deepEqual(rules("a.ts", "https://base-sepolia.g.alchemy.com/v2/" + "x".repeat(32)), ["RPC URL with key"]);
   assert.deepEqual(rules("a.ts", "postgres://reader:" + "hunter2" + "@db.example/journal"), ["database URL with password"]);
   assert.deepEqual(rules("a.ts", `cmcApiKey: "${"Q".repeat(24)}"`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `CMC_API_KEY_V2: "${"Q".repeat(24)}"`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `const supabaseKey = "${"eyJ" + "a".repeat(10) + "." + "b".repeat(10)}";`), ["assigned API key"]);
 });
 
 test("env files: only an example with empty values", () => {
@@ -24,6 +29,9 @@ test("env files: only an example with empty values", () => {
   assert.deepEqual(rules("app/.env.local", ""), ["env file in git"]);
   assert.deepEqual(rules(".env.example", "# comment\nCMC_API_KEY=\nRPC_URL=\n"), []);
   assert.deepEqual(rules(".env.example", "CMC_API_KEY=abc"), ["value in env example"]);
+  assert.deepEqual(rules(".env.example", "export JOURNAL_DATABASE_URL=" + "postgres://r:" + "p@h/db"), ["value in env example"]);
+  assert.deepEqual(rules(".env.example", "rpc_url=https://x"), ["value in env example"]);
+  assert.deepEqual(rules(".env.example", "not an assignment"), ["value in env example"]);
 });
 
 test("allow marker and key files", () => {

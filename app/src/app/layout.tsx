@@ -10,7 +10,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://lab.despell.io"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://lab.despell.io"),
   title: { default: "DeSpell Router Lab", template: "%s · DeSpell Router Lab" },
   description: "Hackathon demos for the DeSpell AI router. One card shows what leaves your wallet, what comes in and the route, and nothing moves until you sign it.",
 };
