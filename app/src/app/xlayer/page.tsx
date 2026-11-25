@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { XLayerCardDemo } from "@/components/circuit/xlayer-card-demo";
 import { getContest } from "@/lib/contests";
+import { DEPLOYMENT } from "@/lib/circuit/circuit";
 import { circuitPageHref } from "@/lib/circuit/links";
 import { GIWA_SEPOLIA } from "@/lib/swap/chains";
 
@@ -22,13 +23,15 @@ export default async function Page(props: PageProps<"/xlayer">) {
         </p>
         {demoMismatch ? (
           <p className="lab-demo-note" role="note">
-            Demo: the server&apos;s judgment of this pool is altered on purpose, to show what a mismatch does. <Link href="/xlayer">Back to the real one</Link>.
+            Demo: the server&apos;s judgment of this pool is altered on purpose, to show what a mismatch does.
+            {DEPLOYMENT ? "" : " The circuit is not taped out on X Layer yet, so nothing is compared and the card is not stopped."}{" "}
+            <Link href="/xlayer">Back to the real one</Link>.
           </p>
-        ) : (
+        ) : DEPLOYMENT ? (
           <p className="lab-note">
             <Link href="/xlayer?demo=mismatch">Show a mismatch</Link> (alters the server&apos;s judgment on this page only; it can only stop the card).
           </p>
-        )}
+        ) : null}
       </div>
       <XLayerCardDemo demoMismatch={demoMismatch} />
     </main>

@@ -4,7 +4,7 @@ import { CircuitLine } from "@/components/circuit/circuit-line";
 import { useCircuitCheck } from "@/components/circuit/use-circuit-check";
 import { SwapCard } from "@/components/swap/swap-card";
 import { DEMO_USDC } from "@/components/swap/swap-demo";
-import { circuitGate } from "@/lib/circuit/check";
+import { circuitGate, circuitLine } from "@/lib/circuit/check";
 import { circuitPageHref } from "@/lib/circuit/links";
 import { GIWA_SEPOLIA } from "@/lib/swap/chains";
 
@@ -17,7 +17,7 @@ export function XLayerCardDemo({ demoMismatch }: { demoMismatch: boolean }) {
       chain={GIWA_SEPOLIA}
       amountIn={DEMO_USDC}
       gate={circuitGate(check)}
-      checkLine={<CircuitLine check={check} href={href} />}
+      checkLine={circuitLine(check) ? <CircuitLine check={check} href={href} /> : undefined}
     />
   );
 }

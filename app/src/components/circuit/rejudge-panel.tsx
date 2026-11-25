@@ -2,7 +2,7 @@
 
 import { useCircuitCheck } from "@/components/circuit/use-circuit-check";
 import { X_LAYER } from "@/lib/circuit/circuit";
-import { MISMATCH_TITLE } from "@/lib/circuit/check";
+import { MALFORMED_TITLE, MISMATCH_TITLE } from "@/lib/circuit/check";
 import { encodeOutput } from "@despell-lab/xlayer/src/bits.ts";
 import { outputRows } from "@/lib/circuit/pins";
 import { PinTable } from "./pin-table";
@@ -20,6 +20,8 @@ export function RejudgePanel({ chainId, pool, demoMismatch }: { chainId: number;
           ? { text: "Asking X Layer…", tone: "plain" }
           : check.kind === "unreachable"
             ? { text: `X Layer not reached (${check.reason})`, tone: "plain" }
+            : check.kind === "malformed"
+              ? { text: `${MALFORMED_TITLE}: ${check.reason}`, tone: "stop" }
             : { text: "Being prepared: the circuit is not taped out on X Layer yet", tone: "plain" };
   return (
     <section className="lab-panel" aria-labelledby="onchain-h" data-circuit={check.kind}>
@@ -42,7 +44,7 @@ export function RejudgePanel({ chainId, pool, demoMismatch }: { chainId: number;
             <a href={`${X_LAYER.explorer}/address/${check.deployment.processor}`} target="_blank" rel="noreferrer" className="ds-mono">
               {check.deployment.processor}
             </a>{" "}
-            at X Layer block {String(check.block)}: {check.circuit.stage}, {check.circuit.lane} lane. The server judged {check.server.judgment.stage},{" "}
+            read at X Layer block {String(check.block)}: {check.circuit.stage}, {check.circuit.lane} lane. The server judged {check.server.judgment.stage},{" "}
             {check.server.judgment.lane} lane.
           </p>
         </>

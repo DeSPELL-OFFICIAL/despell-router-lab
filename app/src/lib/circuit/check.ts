@@ -22,12 +22,17 @@ export type CircuitCheck =
   | { kind: "checking"; server: ServerJudgment; deployment: CircuitDeployment }
   | { kind: "same"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
   | { kind: "differs"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
-  | { kind: "unreachable"; server: ServerJudgment; deployment: CircuitDeployment; reason: string };
+  | { kind: "unreachable"; server: ServerJudgment; deployment: CircuitDeployment; reason: string }
+  /** X Layer answered with something that is not a judgment: held, like a mismatch. */
+  | { kind: "malformed"; server: ServerJudgment; deployment: CircuitDeployment; reason: string };
 
 /** What the X Layer read looks like right now (from the query that asks it). */
 export type EvalState =
   | { status: "asking" }
+  /** The read failed in transport (RPC error, timeout): nothing was compared. */
   | { status: "failed"; reason: string }
+  /** The chain answered, but not with a judgment. */
+  | { status: "malformed"; reason: string }
   | { status: "answered"; judgment: Judgment; block: bigint };
 
 /**
@@ -42,6 +47,8 @@ export function checkFrom(server: ServerJudgment | null, deployment: CircuitDepl
       return { kind: "checking", server, deployment };
     case "failed":
       return { kind: "unreachable", server, deployment, reason: read.reason };
+    case "malformed":
+      return { kind: "malformed", server, deployment, reason: read.reason };
     case "answered":
       return sameJudgment(server.judgment, read.judgment)
         ? { kind: "same", server, deployment, circuit: read.judgment, block: read.block }
@@ -54,6 +61,7 @@ export function sameJudgment(a: Judgment, b: Judgment): boolean {
 }
 
 export const MISMATCH_TITLE = "Judgment differs from the circuit";
+export const MALFORMED_TITLE = "The circuit's answer is not a judgment";
 
 const show = (j: Judgment) => `${j.stage}, ${j.lane} lane`;
 
@@ -64,6 +72,8 @@ export function circuitGate(check: CircuitCheck): ContestGate {
       return { state: "pending", label: "the pool judgment circuit" };
     case "differs":
       return { state: "hold", title: MISMATCH_TITLE, items: `· server: ${show(check.server.judgment)} · circuit: ${show(check.circuit)}` };
+    case "malformed":
+      return { state: "hold", title: MALFORMED_TITLE, items: `· ${check.reason}` };
     case "none":
     case "not-deployed":
     case "same":
@@ -89,5 +99,7 @@ export function circuitLine(check: CircuitCheck): CircuitLine | null {
       return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "differs", tone: "stop" };
     case "unreachable":
       return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "not reached", tone: "plain" };
+    case "malformed":
+      return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "not a judgment", tone: "stop" };
   }
 }

@@ -7,9 +7,9 @@ import { SELECTOR } from "@despell-lab/xlayer/src/onchain.ts";
 import { GIWA_SEPOLIA, BASE_SEPOLIA } from "@/lib/swap/chains";
 import { canSign } from "@/components/sign-card/sign-card";
 import { CIRCUIT, evaluateLocally, parseDeployment, type CircuitDeployment } from "./circuit";
-import { checkFrom, circuitGate, circuitLine, MISMATCH_TITLE, sameJudgment, type CircuitCheck } from "./check";
+import { checkFrom, circuitGate, circuitLine, MALFORMED_TITLE, MISMATCH_TITLE, sameJudgment, type CircuitCheck } from "./check";
 import { serverJudgmentFor } from "./server-judgment";
-import { EVAL_ABI, judgeOnXLayer } from "./xlayer-eval";
+import { EVAL_ABI, judgeOnXLayer, NotAJudgmentError } from "./xlayer-eval";
 
 const DEPLOYMENT: CircuitDeployment = { processor: "0x1111111111111111111111111111111111111111", circuitId: 7n };
 const server = serverJudgmentFor(GIWA_SEPOLIA.id, GIWA_SEPOLIA.pool.address)!;
@@ -69,6 +69,15 @@ describe("checkFrom (the hook's wiring)", () => {
     expect(circuitGate(check).state).toBe("ok");
   });
 
+  // A circuit id pointing at another circuit answers with bits that are not a judgment: that is the chain
+  // disagreeing, not the network failing, so the card holds.
+  it("holds the card when X Layer answers with something that is not a judgment", () => {
+    const check = checkFrom(server, DEPLOYMENT, { status: "malformed", reason: "the circuit answered 0x6, which is not a judgment" });
+    expect(check.kind).toBe("malformed");
+    expect(circuitGate(check)).toMatchObject({ state: "hold", title: MALFORMED_TITLE });
+    expect(circuitLine(check)?.status).toBe("not a judgment");
+  });
+
   it("never asks without a server judgment or a deployment", () => {
     expect(checkFrom(null, DEPLOYMENT, { status: "asking" }).kind).toBe("none");
     expect(checkFrom(server, null, { status: "asking" }).kind).toBe("not-deployed");
@@ -108,6 +117,19 @@ describe("parseDeployment", () => {
 describe("judgeOnXLayer", () => {
   it("calls TapeOut's eval(uint256,bytes), the selector xlayer/src/onchain.ts uses", () => {
     expect(toFunctionSelector(EVAL_ABI[0])).toBe(`0x${SELECTOR.eval}`);
+  });
+
+  it("throws NotAJudgmentError when the answer's stage code is 5–7", async () => {
+    const transport = custom({
+      async request({ method }: { method: string }) {
+        if (method === "eth_blockNumber") return "0x10";
+        if (method === "eth_chainId") return "0xc4";
+        if (method === "eth_call") return encodeFunctionResult({ abi: EVAL_ABI, functionName: "eval", result: "0x06" });
+        throw new Error(`unexpected ${method}`);
+      },
+    });
+    const client = createPublicClient({ chain: xLayer, transport }) as PublicClient;
+    await expect(judgeOnXLayer(client, DEPLOYMENT, server.input)).rejects.toBeInstanceOf(NotAJudgmentError);
   });
 
   it("packs the input bits, reads the output bits back, and decodes the judgment", async () => {

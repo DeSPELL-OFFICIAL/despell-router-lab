@@ -134,7 +134,7 @@ function simulationState(state: CardState): SignGate["simulation"] {
 
 function check(state: CardState, decoded: DecodedPlan | null, decodeError: string | null, sim: SignGate["simulation"]): CardCheck {
   const { chain, plan, account, balances, phase, gate, quote, quoteError } = state;
-  if (gate.state === "hold") return { tone: "stop", title: gate.title, items: gate.items };
+  // What already happened to a sent transaction outranks a contest's hold: the user must still see it.
   if (phase.kind === "unconfirmed") {
     return {
       tone: "stop",
@@ -143,6 +143,7 @@ function check(state: CardState, decoded: DecodedPlan | null, decodeError: strin
     };
   }
   if (phase.kind === "failed") return { tone: "stop", title: "Transaction failed", items: `· ${phase.reason}` };
+  if (gate.state === "hold" && phase.kind !== "done") return { tone: "stop", title: gate.title, items: gate.items };
   if (phase.kind === "blocked") {
     // Without `at`, a sent transaction was released by [Check again] and the card is off until reload.
     return { tone: "stop", title: phase.at === undefined ? "Released: reload to sign again" : "Stopped before signing", items: `· ${phase.reason}` };

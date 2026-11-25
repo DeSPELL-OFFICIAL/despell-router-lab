@@ -16,18 +16,37 @@ export const EVAL_ABI = parseAbi(["function eval(uint256 id, bytes inputs) view 
 
 export type OnChainJudgment = { vector: number; outputs: number; judgment: Judgment; block: bigint };
 
+/**
+ * X Layer answered, but not with a judgment (an output stage code of 5–7: the circuit id or processor points at
+ * another circuit). Unlike a network error, this is the chain disagreeing, so the card holds on it.
+ */
+export class NotAJudgmentError extends Error {
+  readonly outputs: number;
+  constructor(outputs: number) {
+    super(`the circuit answered 0x${outputs.toString(16)}, which is not a judgment`);
+    this.name = "NotAJudgmentError";
+    this.outputs = outputs;
+  }
+}
+
 export async function judgeOnXLayer(client: PublicClient, deployment: CircuitDeployment, input: JudgmentInput): Promise<OnChainJudgment> {
   const vector = encodeInput(input);
-  const block = await client.getBlockNumber({ cacheTime: 0 });
+  // At "latest", as xlayer/src/onchain.ts does: pinning a block read in a separate call can land on a node behind it.
   const result = await client.readContract({
     address: deployment.processor,
     abi: EVAL_ABI,
     functionName: "eval",
     args: [deployment.circuitId, bytesToHex(packPins(vector, INPUT_COUNT))],
-    blockNumber: block,
   });
+  const block = await client.getBlockNumber({ cacheTime: 0 });
   const outputs = unpackPins(hexToBytes(result), OUTPUT_COUNT);
-  return { vector, outputs, judgment: decodeOutput(outputs), block };
+  let judgment: Judgment;
+  try {
+    judgment = decodeOutput(outputs);
+  } catch {
+    throw new NotAJudgmentError(outputs);
+  }
+  return { vector, outputs, judgment, block };
 }
 
 let client: PublicClient | null = null;
