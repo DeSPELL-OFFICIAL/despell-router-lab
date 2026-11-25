@@ -47,7 +47,7 @@ abstract contract TestPoolScript is Script {
         (uint160 sqrtPriceX96,,,) = POOL_MANAGER.getSlot0(poolId);
         require(sqrtPriceX96 != 0, "pool not initialized");
 
-        (int24 tickLower, int24 tickUpper) = BaseSepolia.seedRange(sqrtPriceX96);
+        (int24 tickLower, int24 tickUpper) = BaseSepolia.seedRange(sqrtPriceX96, key.tickSpacing);
         uint128 liquidity = LiquidityAmounts.getLiquidityForAmount0(
             TickMath.getSqrtPriceAtTick(tickLower), TickMath.getSqrtPriceAtTick(tickUpper), amountWei
         );

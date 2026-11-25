@@ -1,5 +1,6 @@
 import {
   decodeAbiParameters,
+  encodeAbiParameters,
   decodeFunctionData,
   encodeFunctionData,
   getAddress,
@@ -90,7 +91,15 @@ function decodeIndependently(chain: SwapChain, plan: SwapPlan): Signed {
   return out;
 }
 
-const quoteFor = (chain: SwapChain, expectedOut: bigint): Quote => ({ chainId: chain.id, amountIn: AMOUNT, expectedOut, block: 100n, at: NOW * 1000, lpFee: chain.id === BASE_SEPOLIA.id ? 500 : 3000 });
+const quoteFor = (chain: SwapChain, expectedOut: bigint, pool: Hex | undefined = chain.dex === "uniswap-v4" ? chain.pools[0].id : undefined): Quote => ({
+  chainId: chain.id,
+  amountIn: AMOUNT,
+  expectedOut,
+  block: 100n,
+  at: NOW * 1000,
+  lpFee: chain.id === BASE_SEPOLIA.id ? 500 : 3000,
+  pool,
+});
 const freshWallet: WalletState = { account: ACCOUNT, usdcBalance: 20_000_000n, erc20Allowance: 0n, permit2: { amount: 0n, expiration: 0 } };
 
 function passed(plan: SwapPlan): Simulation {
@@ -305,5 +314,81 @@ describe("buildPlan", () => {
     const v = cardView({ ...stateFor(GIWA_SEPOLIA, plan), balances: { usdc: 0n, eth: 10n ** 16n } });
     expect(v.check.tone).toBe("stop");
     expect(v.check.title).toBe("Not enough USDC (Mock)");
+  });
+});
+
+describe("Base Sepolia pools", () => {
+  const [A, B] = BASE_SEPOLIA.pools;
+  const SWAP_PARAMS = parseAbiParameters("((address, address, uint24, int24, address), bool, uint128, uint128, bytes)");
+  const INPUT = parseAbiParameters("bytes, bytes[]");
+  const planFor = (pool: Hex) => buildPlan({ chain: BASE_SEPOLIA, quote: quoteFor(BASE_SEPOLIA, 6_000_000_000_000_000n, pool), wallet: freshWallet, nowSec: NOW });
+
+  function swapOf(plan: SwapPlan) {
+    const { args } = decodeFunctionData({ abi: UR, data: plan.steps.at(-1)!.tx.data });
+    const [actions, params] = decodeAbiParameters(INPUT, args[1][0]);
+    const [swap] = decodeAbiParameters(SWAP_PARAMS, params[0]);
+    return { args, actions, params, swap };
+  }
+
+  it("swaps through the pool the quote is for, and the route line names that pool", () => {
+    for (const pool of [A, B]) {
+      const plan = planFor(pool.id);
+      const [c0, c1, fee, spacing, hooks] = swapOf(plan).swap[0];
+      expect([c0, c1, fee, spacing]).toEqual([pool.key.currency0, pool.key.currency1, pool.key.fee, pool.key.tickSpacing]);
+      expect(isAddressEqual(hooks, pool.key.hooks)).toBe(true);
+      const v = cardView(stateFor(BASE_SEPOLIA, plan));
+      expect(v.decoded?.swap.pool).toBe(pool.id);
+      expect(v.route.label).toBe(`Uniswap v4 · ETH/USDC ${pool.label}`);
+      expect(v.check.tone).toBe("ok");
+    }
+    expect(A.key.tickSpacing).not.toBe(B.key.tickSpacing);
+  });
+
+  it("refuses a quote that names no listed pool", () => {
+    expect(() => planFor(`0x${"22".repeat(32)}`)).toThrow("not listed");
+    const noPool = { ...quoteFor(BASE_SEPOLIA, 6_000_000_000_000_000n), pool: undefined };
+    expect(() => buildPlan({ chain: BASE_SEPOLIA, quote: noPool, wallet: freshWallet, nowSec: NOW })).toThrow("not listed");
+  });
+
+  // The sixth forged plan: the same swap through a pool nobody listed (pool A's key with tick spacing 30).
+  it("stops a plan whose swap goes through an unlisted pool", () => {
+    const plan = planFor(A.id);
+    const { args, actions, params, swap } = swapOf(plan);
+    const [c0, c1, fee, , hooks] = swap[0];
+    const forged = encodeAbiParameters(SWAP_PARAMS, [[[c0, c1, fee, 30, hooks], swap[1], swap[2], swap[3], swap[4]]]);
+    const input = encodeAbiParameters(INPUT, [actions, [forged, params[1], params[2]]]);
+    const data = encodeFunctionData({ abi: UR, functionName: "execute", args: [args[0], [input], args[2]] });
+    const tampered: SwapPlan = { ...plan, steps: plan.steps.map((s, i) => (i === plan.steps.length - 1 ? { ...s, tx: { ...s.tx, data } } : s)) };
+    const v = cardView(stateFor(BASE_SEPOLIA, tampered));
+    expect(v.check.tone).toBe("stop");
+    expect(v.check.items).toContain("spacing 30");
+    expect(v.check.items).toContain("is not listed");
+    expect(canSign({ ...v, sign: { simulation: v.simulation, onSign: () => {} } })).toBe(false);
+  });
+
+  it("names no route when there is no quote to show", () => {
+    const base: CardState = { chain: BASE_SEPOLIA, amountIn: AMOUNT, quote: null, quoteError: null, account: null, balances: null, plan: null, simulation: null, phase: { kind: "idle" }, gate: NO_CONTEST_CHECK };
+    expect(cardView(base).route.label).toBeUndefined(); // still loading
+    const none = cardView({ ...base, quoteError: "every listed pool is left out" });
+    expect(none.route.label).toBe("None");
+    expect(none.receives).toEqual({ amount: "—", token: "" });
+    expect(canSign({ ...none, sign: { simulation: none.simulation, onSign: () => {} } })).toBe(false);
+    expect(cardView({ ...base, quote: quoteFor(BASE_SEPOLIA, 6_000_000_000_000_000n, B.id) }).route.label).toBe(`Uniswap v4 · ETH/USDC ${B.label}`);
+  });
+});
+
+describe("blocked card titles", () => {
+  const plan = buildPlan({ chain: BASE_SEPOLIA, quote: quoteFor(BASE_SEPOLIA, 6_000_000_000_000_000n), wallet: freshWallet, nowSec: NOW });
+
+  it("says a stop before the next signature stopped before signing", () => {
+    const v = cardView({ ...stateFor(BASE_SEPOLIA, plan), phase: { kind: "blocked", reason: "declined in your wallet", at: NOW * 1000 } });
+    expect(v.check).toMatchObject({ tone: "stop", title: "Stopped before signing", items: "· declined in your wallet" });
+  });
+
+  // A released transaction was sent; its nonce was used by another. Saying "before signing" would be wrong.
+  it("says a released transaction was released and the card needs a reload", () => {
+    const v = cardView({ ...stateFor(BASE_SEPOLIA, plan), phase: { kind: "blocked", reason: "nonce 12 was used by another transaction" } });
+    expect(v.check).toMatchObject({ tone: "stop", title: "Released — reload to sign again" });
+    expect(canSign({ ...v, sign: { simulation: v.simulation, onSign: () => {} } })).toBe(false);
   });
 });

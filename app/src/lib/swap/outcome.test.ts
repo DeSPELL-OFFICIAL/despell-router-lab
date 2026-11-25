@@ -10,7 +10,7 @@ import { effectivePhase } from "./view";
 const NOW = 1_795_700_000;
 const plan = buildPlan({
   chain: BASE_SEPOLIA,
-  quote: { chainId: BASE_SEPOLIA.id, amountIn: 10_000_000n, expectedOut: 6_000_000_000_000_000n, block: 1n, at: NOW * 1000, lpFee: 500 },
+  quote: { chainId: BASE_SEPOLIA.id, amountIn: 10_000_000n, expectedOut: 6_000_000_000_000_000n, block: 1n, at: NOW * 1000, lpFee: 500, pool: BASE_SEPOLIA.pools[0].id },
   wallet: { account: getAddress("0x1111111111111111111111111111111111111111"), usdcBalance: 20_000_000n, erc20Allowance: 0n, permit2: { amount: 0n, expiration: 0 } },
   nowSec: NOW,
 });

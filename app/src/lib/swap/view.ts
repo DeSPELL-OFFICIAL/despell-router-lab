@@ -1,6 +1,6 @@
 import { isAddressEqual, type Address, type Hex } from "viem";
 import type { Amount, CardCheck, CostItem, SignGate } from "@/components/sign-card/sign-card";
-import type { SwapChain } from "./chains";
+import { v4Pool, type SwapChain } from "./chains";
 import { decodePlan, decodeStep, type DecodedPlan, type DecodedStep } from "./decode";
 import { fmtEth, fmtFee, fmtTime, fmtUsdc, short } from "./format";
 import { minOutFor, type Quote, type SwapPlan } from "./plan";
@@ -75,7 +75,7 @@ export type CardView = {
   status: { text: string; accent: boolean };
   sends?: Amount;
   receives?: Amount;
-  route: { label: string; note?: string };
+  route: { label: string | undefined; note?: string };
   cost: { total: string; items: CostItem[] };
   check: CardCheck;
   signLabel: string;
@@ -84,10 +84,17 @@ export type CardView = {
   decoded: DecodedPlan | null;
 };
 
-const ROUTE_LABEL: Record<SwapChain["dex"], string> = {
-  "uniswap-v4": "Uniswap v4 · ETH/USDC test pool",
-  "uniswap-v3": "Uniswap v3 · WETH/USDC (Mock)",
-};
+/**
+ * The route line. On Base Sepolia it names the pool: the one the signed bytes swap through once there is a plan,
+ * else the one the quote is for. With no quote and an error, there is no route to name.
+ */
+function routeLabel(state: CardState, decoded: DecodedPlan | null): string | undefined {
+  const { chain, quote, quoteError } = state;
+  if (chain.dex === "uniswap-v3") return "Uniswap v3 · WETH/USDC (Mock)";
+  const pool = v4Pool(chain, decoded ? decoded.swap.pool : quote?.pool);
+  if (pool) return `Uniswap v4 · ETH/USDC ${pool.label}`;
+  return quoteError ? "None" : undefined;
+}
 
 function contractName(chain: SwapChain, address: Address): string {
   if (isAddressEqual(address, chain.usdc.address)) return "USDC";
@@ -143,7 +150,12 @@ function check(state: CardState, decoded: DecodedPlan | null, decodeError: strin
     };
   }
   if (phase.kind === "failed") return { tone: "stop", title: "Transaction failed", items: `· ${phase.reason}` };
-  if (phase.kind === "blocked") return { tone: "stop", title: "Stopped before signing", items: `· ${phase.reason}` };
+  if (phase.kind === "blocked") {
+    // Without `at`, an unconfirmed transaction was released (its nonce was used): something was sent, so it did not
+    // stop before signing, and the card stays off until reload.
+    const title = phase.at === undefined ? "Released — reload to sign again" : "Stopped before signing";
+    return { tone: "stop", title, items: `· ${phase.reason}` };
+  }
   if (decodeError) return { tone: "stop", title: "These transactions do not match the card", items: `· ${decodeError}` };
   if (quoteError && !quote) return { tone: "stop", title: "No quote", items: `· ${quoteError}` };
   if (!quote) return { tone: "plain", title: "Getting a quote…" };
@@ -211,6 +223,9 @@ export function cardView(state: CardState): CardView {
     receives = { amount: `+${fmtEth(plan.expectedOut)}`, token: "ETH", note: `min ${fmtEth(decoded.swap.minOut)}` };
   } else if (quote && !plan) {
     receives = { amount: `+${fmtEth(quote.expectedOut)}`, token: "ETH", note: `min ${fmtEth(minOutFor(quote.expectedOut))}` };
+  } else if (state.quoteError && !plan) {
+    // Nothing is coming: say so instead of leaving the row in its loading look.
+    receives = { amount: "—", token: "" };
   }
 
   const items: CostItem[] = [];
@@ -247,7 +262,7 @@ export function cardView(state: CardState): CardView {
     status,
     sends,
     receives,
-    route: { label: ROUTE_LABEL[chain.dex], note: quote ? `fee ${fmtFee(quote.lpFee)}` : undefined },
+    route: { label: routeLabel(state, decoded), note: quote ? `fee ${fmtFee(quote.lpFee)}` : undefined },
     cost: { total: simOk ? `${fmtEth(simOk.gas * simOk.gasPrice)} ETH gas` : "—", items },
     check: check(state, decoded, decodeError, sim),
     signLabel,

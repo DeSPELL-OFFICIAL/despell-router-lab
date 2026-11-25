@@ -22,7 +22,7 @@ The DeSpell app itself is an existing private product. This repository holds onl
 
 ## The test-network swap card (`/swap`)
 
-The shared card, live on two test networks: 10 USDC to ETH on Base Sepolia (Uniswap v4, the `reactive/` test pool, through the Universal Router and Permit2) and on GIWA Sepolia (Uniswap v3 SwapRouter02, WETH/USDC Mock).
+The shared card, live on two test networks: 10 USDC to ETH on Base Sepolia (Uniswap v4, the better of the two `reactive/` test pools, through the Universal Router and Permit2) and on GIWA Sepolia (Uniswap v3 SwapRouter02, WETH/USDC Mock).
 
 - Browser wallets only (EIP-6963 and `window.ethereum`); no WalletConnect.
 - Everything the card says about a transaction (amount sent, minimum received, recipient, each approval's spender, amount and expiry) is decoded from the bytes the wallet will sign (`app/src/lib/swap/decode.ts`). Approvals cover this swap's amount only.

@@ -266,4 +266,30 @@ contract DynamicFeeHookTest is Deployers {
         (lower,) = BaseSepolia.seedRange(TickMath.getSqrtPriceAtTick(BaseSepolia.START_TICK - 3));
         assertEq(lower, BaseSepolia.START_TICK, "a price between ticks rounds up, never down");
     }
+
+    function test_seedRange_secondSpacing_isWholeSpacingsAtLeast200Wide() public pure {
+        int24 spacing = BaseSepolia.SECOND_TICK_SPACING;
+        // The first pool's tick when this was written: -202170, between two usable ticks of 60.
+        (int24 lower, int24 upper) = BaseSepolia.seedRange(TickMath.getSqrtPriceAtTick(-202170), spacing);
+        assertEq(lower, -202140, "the next usable tick above the price");
+        assertEq(upper - lower, 240, "200 rounded up to whole spacings of 60");
+        assertEq(lower % spacing, 0);
+        assertEq(upper % spacing, 0);
+        (int24 firstLower, int24 firstUpper) = BaseSepolia.seedRange(TickMath.getSqrtPriceAtTick(-202170));
+        (int24 sameLower, int24 sameUpper) =
+            BaseSepolia.seedRange(TickMath.getSqrtPriceAtTick(-202170), BaseSepolia.TICK_SPACING);
+        assertEq(firstLower, sameLower, "the first pool's range is unchanged");
+        assertEq(firstUpper - firstLower, BaseSepolia.SEED_RANGE_TICKS);
+        assertEq(sameUpper, firstUpper);
+    }
+
+    /// @dev The pool ids app/src/lib/swap/chains.ts lists for the live hook.
+    bytes32 constant APP_POOL_A_ID = 0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4;
+    bytes32 constant APP_POOL_B_ID = 0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2;
+
+    function test_poolKey_secondPoolIdIsTheOneTheAppLists() public pure {
+        IHooks live = IHooks(0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000);
+        assertEq(PoolId.unwrap(BaseSepolia.poolKey(live).toId()), APP_POOL_A_ID);
+        assertEq(PoolId.unwrap(BaseSepolia.poolKey(live, BaseSepolia.SECOND_TICK_SPACING).toId()), APP_POOL_B_ID);
+    }
 }

@@ -64,7 +64,16 @@ export function buildPage(raw, { generatedAt = new Date().toISOString(), statuse
     reactive: r.reactive
       ? { tx: r.reactive.tx, block: r.reactive.block, at: iso(r.reactive.time), url: EXPLORERS[reactive].tx + r.reactive.tx }
       : null,
-    mark: r.markTx ? { tx: r.markTx, block: r.markBlock, at: iso(r.markTime), url: EXPLORERS[destination].tx + r.markTx } : null,
+    mark: r.markTx
+      ? {
+          tx: r.markTx,
+          block: r.markBlock,
+          at: iso(r.markTime),
+          url: EXPLORERS[destination].tx + r.markTx,
+          // The status the Marked event set, when the measurement read it (runs measured before it did not).
+          ...(Number.isInteger(r.newStatus) ? { newStatus: r.newStatus } : {}),
+        }
+      : null,
     seconds: r.seconds ?? null,
     blocks: r.blocks ?? null,
     reopen: r.reopenTx ? { tx: r.reopenTx, url: EXPLORERS[destination].tx + r.reopenTx } : null,

@@ -75,6 +75,16 @@ test("the journal links every transaction to its own explorer", () => {
   assert.equal(page.journal[3].result, "no mark within 180 s");
 });
 
+test("a mark carries the status its Marked event set, when the measurement read it", () => {
+  const raw = fixture();
+  raw.runs[0].newStatus = 2;
+  raw.runs[1].newStatus = 0;
+  const page = buildPage(raw);
+  assert.equal(page.journal[0].mark.newStatus, 2);
+  assert.equal(page.journal[1].mark.newStatus, 0);
+  assert.equal("newStatus" in page.journal[2].mark, false, "runs measured before it was read have none");
+});
+
 test("marksNow is a live snapshot only when statuses are given", () => {
   assert.equal(buildPage(fixture()).marksNow, null);
   const live = buildPage(fixture(), { statuses: { [hash("f")]: 2 } });

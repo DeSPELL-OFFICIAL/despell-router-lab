@@ -24,6 +24,10 @@ library BaseSepolia {
     uint24 internal constant INITIAL_FEE = 500;
     /// @notice Tick spacing of the v3 0.05% tier.
     int24 internal constant TICK_SPACING = 10;
+
+    /// @notice Tick spacing of the second test pool on the same hook (the v3 0.3% tier). Same hook, so
+    ///         PoolReflex watches it too; the app's quote takes whichever unmarked pool pays more.
+    int24 internal constant SECOND_TICK_SPACING = 60;
     /// @notice Starting tick: 1.0001^-202230 * 1e12 = about 1650.83 USDC per ETH.
     int24 internal constant START_TICK = -202230;
     /// @notice Width of a seed position: 200 ticks, about 2% above the price at seeding time.
@@ -31,22 +35,45 @@ library BaseSepolia {
 
     /// @notice The ETH/USDC test pool on a given hook. Native ETH (address 0) sorts first.
     function poolKey(IHooks hook) internal pure returns (PoolKey memory) {
+        return poolKey(hook, TICK_SPACING);
+    }
+
+    /// @notice An ETH/USDC dynamic-fee pool on a given hook with a given tick spacing.
+    function poolKey(IHooks hook, int24 tickSpacing) internal pure returns (PoolKey memory) {
         return PoolKey({
             currency0: Currency.wrap(address(0)),
             currency1: Currency.wrap(USDC),
             fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-            tickSpacing: TICK_SPACING,
+            tickSpacing: tickSpacing,
             hooks: hook
         });
+    }
+
+    /// @notice The pool key for a tick spacing the scripts know: TICK_SPACING or SECOND_TICK_SPACING.
+    function knownPoolKey(IHooks hook, int256 tickSpacing) internal pure returns (PoolKey memory) {
+        require(
+            tickSpacing == TICK_SPACING || tickSpacing == SECOND_TICK_SPACING,
+            "TICK_SPACING must be 10 (first pool) or 60 (second pool)"
+        );
+        return poolKey(hook, int24(tickSpacing));
     }
 
     /// @notice Range for an ETH-only seed position: it starts at the first usable tick at or above the
     ///         current price, so the position needs ETH and no USDC. It serves USDC -> ETH swaps.
     function seedRange(uint160 sqrtPriceX96) internal pure returns (int24 tickLower, int24 tickUpper) {
+        return seedRange(sqrtPriceX96, TICK_SPACING);
+    }
+
+    /// @notice The same range for a pool with another tick spacing: at least SEED_RANGE_TICKS wide, in whole spacings.
+    function seedRange(uint160 sqrtPriceX96, int24 tickSpacing)
+        internal
+        pure
+        returns (int24 tickLower, int24 tickUpper)
+    {
         int24 tick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
-        tickLower = tick / TICK_SPACING * TICK_SPACING;
-        if (tickLower > tick) tickLower -= TICK_SPACING; // round toward negative infinity
-        if (TickMath.getSqrtPriceAtTick(tickLower) < sqrtPriceX96) tickLower += TICK_SPACING;
-        tickUpper = tickLower + SEED_RANGE_TICKS;
+        tickLower = tick / tickSpacing * tickSpacing;
+        if (tickLower > tick) tickLower -= tickSpacing; // round toward negative infinity
+        if (TickMath.getSqrtPriceAtTick(tickLower) < sqrtPriceX96) tickLower += tickSpacing;
+        tickUpper = tickLower + (SEED_RANGE_TICKS + tickSpacing - 1) / tickSpacing * tickSpacing;
     }
 }

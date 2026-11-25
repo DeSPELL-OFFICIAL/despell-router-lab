@@ -9,7 +9,7 @@ import {
   v4SwapInput,
   v4Take,
 } from "./abi";
-import { targets, type BaseSepoliaSwap, type GiwaSepoliaSwap, type SwapChain } from "./chains";
+import { targets, v4Pool, type BaseSepoliaSwap, type GiwaSepoliaSwap, type SwapChain, type V4Pool } from "./chains";
 
 /*
   The quote object. One plan holds the quote the card shows and the exact
@@ -39,6 +39,8 @@ export type Quote = {
   at: number;
   /** LP fee in hundredths of a bip (500 = 0.05%). */
   lpFee: number;
+  /** Base Sepolia: id of the listed pool this quote is for (the plan swaps through it). */
+  pool?: Hex;
 };
 
 /** What the wallet holds right now, read just before building the plan. */
@@ -87,7 +89,7 @@ const approve = (token: Address, spender: Address, amount: bigint): Tx => ({
   value: 0n,
 });
 
-function v4Steps(chain: BaseSepoliaSwap, wallet: WalletState, amountIn: bigint, minOut: bigint, deadline: number, nowSec: number): Step[] {
+function v4Steps(chain: BaseSepoliaSwap, pool: V4Pool, wallet: WalletState, amountIn: bigint, minOut: bigint, deadline: number, nowSec: number): Step[] {
   const steps: Step[] = [];
   if (wallet.erc20Allowance < amountIn) {
     steps.push({ kind: "approve", tx: approve(chain.usdc.address, chain.permit2, amountIn) });
@@ -108,7 +110,7 @@ function v4Steps(chain: BaseSepoliaSwap, wallet: WalletState, amountIn: bigint, 
       },
     });
   }
-  const { key } = chain.pool;
+  const { key } = pool;
   // USDC is currency1 and ETH currency0, so selling USDC is one-for-zero.
   const actions = concatHex([numberToHex(ACTION.SWAP_EXACT_IN_SINGLE, { size: 1 }), numberToHex(ACTION.SETTLE_ALL, { size: 1 }), numberToHex(ACTION.TAKE, { size: 1 })]);
   const params = [
@@ -182,7 +184,14 @@ export function buildPlan({ chain, quote, wallet: given, nowSec, slippageBps = S
   const minOut = minOutFor(quote.expectedOut, slippageBps);
   if (minOut <= 0n) throw new Error("Minimum received rounds to zero");
   const deadline = nowSec + DEADLINE_SECONDS;
-  const steps = chain.dex === "uniswap-v4" ? v4Steps(chain, wallet, quote.amountIn, minOut, deadline, nowSec) : v3Steps(chain, wallet, quote.amountIn, minOut, deadline);
+  let steps: Step[];
+  if (chain.dex === "uniswap-v4") {
+    const pool = v4Pool(chain, quote.pool);
+    if (!pool) throw new Error("Quote is for a pool that is not listed");
+    steps = v4Steps(chain, pool, wallet, quote.amountIn, minOut, deadline, nowSec);
+  } else {
+    steps = v3Steps(chain, wallet, quote.amountIn, minOut, deadline);
+  }
   const allowed = new Set(targets(chain));
   for (const step of steps) {
     if (!allowed.has(step.tx.to)) throw new Error(`Plan targets an unlisted contract: ${step.tx.to}`);

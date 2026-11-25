@@ -7,6 +7,7 @@
   are shown for reference only: the two chains' clocks are not the same clock.
 */
 import recorded from "@despell-lab/reactive/reflex-page.json";
+import { BASE_SEPOLIA } from "./swap/chains";
 
 export const SCHEMA = "despell-reflex-page/1";
 
@@ -19,7 +20,8 @@ export type JournalEntry = {
   change: { kind: string; oldFee: number; newFee: number; label: string } | null;
   origin: (TxRef & { reactscan: string }) | null;
   reactive: TxRef | null;
-  mark: TxRef | null;
+  /** `newStatus`: the status PoolGuard's Marked event set, recorded by measurements from DES-700 on. */
+  mark: (TxRef & { newStatus?: number }) | null;
   seconds: number | null;
   blocks: number | null;
   reopen: { tx: string; url: string } | null;
@@ -105,9 +107,9 @@ export function summarize(page: ReflexPage): Summary {
 }
 
 /** "1–2 s · 4–10 blocks", or one value when the range is a single number. */
-export function rangeLine(s: Summary): string {
-  const span = (a: number | null, b: number | null) => (a === b ? `${a}` : `${a}–${b}`);
-  return `${span(s.minSeconds, s.maxSeconds)} s · ${span(s.minBlocks, s.maxBlocks)} blocks`;
+/** A range as "4–10", or "4" when both ends agree; "—" for a missing end. */
+export function span(a: number | null, b: number | null): string {
+  return a === b ? `${a ?? "—"}` : `${a ?? "—"}–${b ?? "—"}`;
 }
 
 export function shortHex(h: string): string {
@@ -141,8 +143,10 @@ export const REFLEX_STATUS: Readonly<Record<string, number>> = {
 };
 
 /** The status a marked run set: the reflex table's entry for its change kind. */
+/** The status a marked run set: the one its Marked event recorded, else the reflex table's for its change kind. */
 export function markedStatus(j: JournalEntry): number | null {
   if (j.result !== "marked" || !j.change) return null;
+  if (Number.isInteger(j.mark?.newStatus)) return j.mark!.newStatus!;
   return REFLEX_STATUS[j.change.kind] ?? null;
 }
 
@@ -158,22 +162,39 @@ export function journalNewestFirst(page: ReflexPage): JournalEntry[] {
 const BASE_SEPOLIA_RPC = "https://sepolia.base.org";
 const STATUS_OF = "0xc7df14e2"; // statusOf(bytes32)
 
+export type HookPool = { poolId: string; label: string; measured: boolean };
+
+/**
+ * Every lab pool on the watched hook. PoolReflex reacts to FeeUpdated from the hook for any pool, so all of them are
+ * watched; `measured` marks the one the timed runs used.
+ */
+export function hookPools(page: ReflexPage): HookPool[] {
+  const hook = page.contracts.hook.address.toLowerCase();
+  const measured = new Set(page.watchedPools.map((w) => w.poolId.toLowerCase()));
+  const pools = BASE_SEPOLIA.pools
+    .filter((p) => p.key.hooks.toLowerCase() === hook)
+    .map((p) => ({ poolId: p.id, label: `Uniswap v4 ETH/USDC · ${p.label}`, measured: measured.has(p.id.toLowerCase()) }));
+  if (!pools.some((p) => p.measured)) throw new Error("reflex page: the measured pool is not among the app's pools");
+  return pools;
+}
+
 export type LiveMark = { poolId: string; status: number; label: string };
 export type LiveRead = { marks: LiveMark[]; readAt: string } | null;
 
 /**
- * Reads statusOf(poolId) from PoolGuard for every watched pool. Returns null when the RPC cannot be reached,
+ * Reads statusOf(poolId) from PoolGuard for every given pool. Returns null when the RPC cannot be reached,
  * so the page shows that the live read is missing instead of a number it did not read.
  */
 export async function readMarksNow(
   page: ReflexPage,
+  pools: readonly { poolId: string }[] = hookPools(page),
   fetchImpl: typeof fetch = fetch,
   now: () => Date = () => new Date(),
 ): Promise<LiveRead> {
   try {
     // One overall deadline for every pool, read side by side.
     const signal = AbortSignal.timeout(5_000);
-    const read = async (pool: ReflexPage["watchedPools"][number]): Promise<LiveMark | null> => {
+    const read = async (pool: { poolId: string }): Promise<LiveMark | null> => {
       const res = await fetchImpl(BASE_SEPOLIA_RPC, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -190,7 +211,7 @@ export async function readMarksNow(
       const status = Number(BigInt(body.result));
       return { poolId: pool.poolId, status, label: statusLabel(page, status) };
     };
-    const marks = await Promise.all(page.watchedPools.map(read));
+    const marks = await Promise.all(pools.map(read));
     if (marks.some((m) => m === null)) return null;
     return { marks: marks as LiveMark[], readAt: now().toISOString() };
   } catch {

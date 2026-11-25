@@ -6,7 +6,8 @@ import { isAddressEqual, TransactionReceiptNotFoundError, type Hex, type PublicC
 import { useConnection, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
 import { useWalletPicker } from "@/components/wallet/providers";
 import type { Outcome, Prerequisite } from "@/components/sign-card/sign-card";
-import { txUrl, type SwapChain } from "@/lib/swap/chains";
+import { txUrl, v4Pool, type SwapChain } from "@/lib/swap/chains";
+import { decodePlan } from "@/lib/swap/decode";
 import { fmtEth } from "@/lib/swap/format";
 import { buildPlan, type SwapPlan } from "@/lib/swap/plan";
 import { afterRecheck, afterSigning, firstLine, type CardUpdate } from "@/lib/swap/outcome";
@@ -30,6 +31,11 @@ import { effectivePhase as phaseOnScreen, gateStopReason, type CardState, type C
   A transaction the wallet sent but whose receipt could not be read stays
   "unconfirmed": the plan stays frozen and nothing new can be signed until
   [Check again] reads its receipt.
+
+  On Base Sepolia a page may leave pools out (`leaveOut`): the quote skips
+  them, and a plan whose swap goes through one of them is not signed, nor
+  is its next transaction if the pool is left out mid-way. `null` means the
+  page does not know yet, and no quote is read until it does.
 */
 
 const REFRESH_MS = 20_000;
@@ -39,7 +45,10 @@ const nowMs = () => Date.now();
 
 type Frozen = { plan: SwapPlan; simulation: Extract<Simulation, { ok: true }> };
 
-export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
+/** The pools a page leaves out, as a stable key for queries. */
+const leaveOutKey = (ids: readonly Hex[]) => [...new Set(ids.map((id) => id.toLowerCase()))].sort().join(",");
+
+export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate, leaveOut: readonly Hex[] | null = []) {
   const wagmiClient = usePublicClient({ chainId: chain.id });
   const client = wagmiClient as unknown as PublicClient | undefined;
   const connection = useConnection();
@@ -67,11 +76,26 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
   useEffect(() => {
     gateRef.current = gate;
   }, [gate]);
+  const outKey = leaveOut === null ? null : leaveOutKey(leaveOut);
+  const leaveOutRef = useRef<string | null>(outKey);
+  useEffect(() => {
+    leaveOutRef.current = outKey;
+  }, [outKey]);
+
+  /** Why this plan must not be signed now because its pool is left out (or unknown), or null. */
+  function poolStopReason(plan: SwapPlan): string | null {
+    if (chain.dex !== "uniswap-v4") return null;
+    const out = leaveOutRef.current;
+    if (out === null) return "waiting to learn which pools are left out";
+    const pool = decodePlan(chain, plan.steps).swap.pool;
+    if (pool && out.split(",").includes(pool.toLowerCase())) return `${v4Pool(chain, pool)?.label ?? pool} was left out of the route`;
+    return null;
+  }
 
   const quoteQ = useQuery({
-    queryKey: ["swap-quote", chain.id, amountIn.toString()],
-    queryFn: () => readQuote(client!, chain, amountIn),
-    enabled: Boolean(client) && !busy,
+    queryKey: ["swap-quote", chain.id, amountIn.toString(), outKey],
+    queryFn: () => readQuote(client!, chain, amountIn, outKey ? (outKey.split(",") as Hex[]) : []),
+    enabled: Boolean(client) && outKey !== null && !busy,
     refetchInterval: busy ? false : REFRESH_MS,
   });
   const walletKey = ["swap-wallet", chain.id, account] as const;
@@ -147,7 +171,7 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
     if (inFlight.current || !client || !prepared || prepQ.isPlaceholderData || !account) return;
     const { plan, simulation } = prepared;
     if (!simulation.ok || simulation.planId !== plan.id || !isAddressEqual(plan.account, account) || connection.chainId !== chain.id) return;
-    if (gateStopReason(gateRef.current)) return;
+    if (gateStopReason(gateRef.current) || poolStopReason(plan)) return;
     inFlight.current = true;
     setNotice(null);
     setFrozen({ plan, simulation });
@@ -157,7 +181,7 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate) {
         send: (tx) => send.mutateAsync({ account: plan.account, chainId: chain.id, to: tx.to, data: tx.data, value: tx.value }),
         wait: (hash) => waitFor(hash),
         nonceOf: (hash) => client.getTransaction({ hash }).then((t) => t.nonce),
-        stopReason: () => (!alive.current ? "the card was closed" : gateStopReason(gateRef.current)),
+        stopReason: () => (!alive.current ? "the card was closed" : (gateStopReason(gateRef.current) ?? poolStopReason(plan))),
         onPhase: (p) => {
           if (alive.current) setPhase(p);
         },
