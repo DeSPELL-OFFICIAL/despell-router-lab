@@ -77,3 +77,21 @@ describe("WrapperList", () => {
     expect(html).toContain("not an EVM chain");
   });
 });
+
+describe("WrapperList rows", () => {
+  it("opens the best row and keeps a blocked row above it folded", () => {
+    const html = render(
+      screen([
+        row("Cheap", 1, { bestBlocked: "discount_over_1pct" }),
+        row("Best", 8453, { badges: ["best"] }),
+        row("Other", 56),
+      ]),
+    );
+    const open = [...html.matchAll(/<details class="cmc-row"( open="")? data-row="([^"]+)"/g)].map((m) => [m[2], Boolean(m[1])]);
+    expect(open).toEqual([
+      ["1:Cheap", false],
+      ["8453:Best", true],
+      ["56:Other", false],
+    ]);
+  });
+});

@@ -184,7 +184,7 @@ export function checkHandoffUrl(url: string, origin: string): string {
   }
   const params = [...u.searchParams.keys()];
   const id = u.searchParams.get("handoff") ?? "";
-  if (u.origin !== origin || u.pathname !== "/" || u.hash || params.length !== 1 || params[0] !== "handoff" || !HANDOFF_ID_RE.test(id)) {
+  if (u.username || u.password || u.origin !== origin || u.pathname !== "/" || u.hash || params.length !== 1 || params[0] !== "handoff" || !HANDOFF_ID_RE.test(id)) {
     throw new DespellConnectorError("handoff link does not point at the connector's own site");
   }
   return u.toString();

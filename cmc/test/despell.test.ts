@@ -147,3 +147,8 @@ test("a link with an unreadable expiry is refused", async () => {
   const { connector } = connectorWith(() => r);
   await assert.rejects(prepareWrapperBuy(connector, { chainId: 8453, tokenAddress: NVDAC, amount: "100" }), /expiry/);
 });
+
+test("a handoff link carrying credentials is refused", () => {
+  assert.throws(() => checkHandoffUrl("https://user:pass@app.despell.io/?handoff=abcdEFGH1234_-xyz", "https://app.despell.io"));
+  assert.throws(() => checkHandoffUrl("https://user@app.despell.io/?handoff=abcdEFGH1234_-xyz", "https://app.despell.io"));
+});

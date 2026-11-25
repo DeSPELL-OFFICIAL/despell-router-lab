@@ -127,8 +127,8 @@ export function WrapperList({ screen, connectorHost, production }: { screen: Wra
       )}
 
       <div className="cmc-list">
-        {screen.rows.map((row, i) => (
-          <Row key={row.key} row={row} open={i === 0 || row.badges.includes("best_buyable")} />
+        {screen.rows.map((row) => (
+          <Row key={row.key} row={row} open={row.badges.includes("best") || row.badges.includes("best_buyable")} />
         ))}
       </div>
 

@@ -14,6 +14,8 @@ import { DEFAULT_DESPELL_MCP_URL } from "@despell-lab/cmc";
 /** Every wrapper is compared for this much USDC, and every buy link spends this much. */
 export const CMC_SPEND_USD = 100;
 export const CMC_SYMBOL = "NVDA";
+/** Most DeSpell buy links one server process asks for per minute. */
+export const BUY_LINKS_PER_MINUTE = 20;
 
 export function cmcApiKey(): string | null {
   return process.env.CMC_PRO_API_KEY?.trim() || null;
