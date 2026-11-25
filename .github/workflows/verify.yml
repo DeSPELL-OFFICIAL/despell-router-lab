@@ -39,11 +39,22 @@ jobs:
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        # A range git cannot resolve would make gitleaks scan nothing and still
+        # pass, so a missing commit fails the job instead.
         run: |
+          set -euo pipefail
+          if ! git rev-parse --verify --quiet "${HEAD}^{commit}" > /dev/null; then
+            echo "::error::gitleaks: head commit '${HEAD}' is not in this checkout"
+            exit 1
+          fi
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            # A brand-new branch has no before commit: scan everything it holds.
             range="$HEAD"
-          else
+          elif git rev-parse --verify --quiet "${BASE}^{commit}" > /dev/null; then
             range="$BASE..$HEAD"
+          else
+            echo "::error::gitleaks: base commit '${BASE}' is not in this checkout (force-push or shallow clone?)"
+            exit 1
           fi
           echo "gitleaks range: $range"
           gitleaks git --no-banner --redact --log-opts="$range" .
