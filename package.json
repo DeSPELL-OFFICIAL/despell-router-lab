@@ -1,0 +1,19 @@
+{
+  "name": "despell-router-lab",
+  "private": true,
+  "description": "Hackathon work for the DeSpell AI router: one app plus one folder per hackathon.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @despell-lab/app dev",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "node --test \"scripts/*.test.mjs\" && pnpm -r --if-present run test",
+    "build": "pnpm -r --if-present run build",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "verify": "pnpm check:secrets && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  }
+}
