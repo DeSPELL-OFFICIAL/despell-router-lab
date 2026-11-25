@@ -1,0 +1,19 @@
+{
+  "name": "@despell-lab/cmc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Rank tokenized wrappers of one stock by what $100 actually buys, using CoinMarketCap RWA prices plus route cost.",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "compare": "node scripts/compare-live.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.4",
+    "typescript": "^5.9.3"
+  }
+}

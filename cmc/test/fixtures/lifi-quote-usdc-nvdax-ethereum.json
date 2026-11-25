@@ -1,0 +1,33 @@
+{
+  "tool": "lifiIntentsDex",
+  "action": {
+    "fromChainId": 1,
+    "toChainId": 1,
+    "toToken": {
+      "address": "0xc845b2894dBddd03858fd2D643B4eF725fE0849d",
+      "symbol": "NVDAx",
+      "decimals": 18,
+      "priceUSD": "142.884"
+    }
+  },
+  "estimate": {
+    "fromAmount": "100000000",
+    "toAmount": "685596148960855662",
+    "toAmountMin": "685596148960855662",
+    "fromAmountUSD": "100.2400",
+    "toAmountUSD": "97.9607",
+    "gasCosts": [
+      {
+        "type": "SEND",
+        "amountUSD": "0.2191"
+      }
+    ],
+    "feeCosts": [
+      {
+        "name": "LIFI Fixed Fee",
+        "amountUSD": "0.2506",
+        "included": true
+      }
+    ]
+  }
+}
