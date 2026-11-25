@@ -22,17 +22,19 @@ The circuit is a second, public copy of the judgment. The server stays the one t
 | `src/circuit.ts` | The same rules written as Boolean equations, built into NAND gates |
 | `src/netlist.ts` | NAND builder, TapeOut byte format, evaluators (one vector, or 32 at a time) |
 | `src/cost.ts` | OKB fees |
+| `src/onchain.ts` | Reads a TapeOut processor over JSON-RPC (`eval`, `netlist`, `circuitInfo`, fees) and gives the circuit's judgment for an input (`judgeOnChain`) |
 | `src/samples.ts` | Named and pseudo-random sample vectors with the rule's answers, for checking `eval` after a tape-out |
 | `scripts/build-circuit.ts` | Builds the netlist, checks it on every input, writes `circuit/pool-judgment.json` and `circuit/pool-judgment-samples.json` |
 | `scripts/check-onchain.ts` | Read-only X Layer checks: fees today, and the byte format against circuits already on chain |
 | `scripts/quote-bem.ts` | Fetches and checks a LI.FI quote for the OKB → BEM swap the tape-out needs (a read; nothing is sent) |
+| `scripts/check-tapeout.ts` | After the tape-out: reads the circuit back from X Layer and compares `eval` with the rule function on every sample |
 | `contracts/` | Foundry: the TapeOut interfaces, the tape-out script, a unit test, and fork tests against X Layer mainnet |
 
 This folder is one package of the repository's pnpm workspace, so `pnpm install` runs at the repository root and the root lockfile pins its two dev dependencies (TypeScript and Node types). Nothing else is needed: the code runs on Node 24 with its built-in TypeScript support.
 
 ```bash
 pnpm install              # at the repository root
-pnpm test                 # 32 tests, including the 2^27 comparison (about 16 s on 12 threads)
+pnpm test                 # 36 tests, including the 2^27 comparison (about 16 s on 12 threads)
 pnpm typecheck
 pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
 pnpm check:circuit        # fail if the committed netlist or samples are out of date
@@ -200,6 +202,14 @@ The circuit goes on a DeSpell processor of its own, so the processor address in 
 | Buy 157 NAND transistors and tape the circuit out, then check `eval` on 64 sample vectors against the rule function | `tapeOutCircuit()` | 3 (exact BEM approval, `mint`, `tapeout`) | 0.01000157 BEM and 0.0013 OKB |
 
 Before the swap the script checks the quote again: the wallet pays and receives, BEM comes out, the minimum received covers the next steps, at most 0.025 OKB goes in, the LI.FI Diamond is the contract called, and the quote is at most 5 minutes old. `tapeOutCircuit()` finds the processor on chain by its creator, after it exists, so no transaction is aimed at an address that only existed in a simulation. A step that is already done is skipped.
+
+After the tape-out, `node scripts/check-tapeout.ts --processor <address> --id <n>` reads the circuit back and asks X Layer's `eval` for each of the 64 samples, one line per sample, and fails on any difference from the rule function. A server asks the chain the same way:
+
+```ts
+import { judgeOnChain, XLayerReader } from "./src/onchain.ts";
+
+const judgment = await judgeOnChain(new XLayerReader(), processor, circuitId, input); // { stage, lane }
+```
 
 On a fork of X Layer mainnet (2026-11-26) the whole run from OKB only went through: the swap bought 0.1240 BEM for 0.0121 OKB, the processor was made, the circuit taped out as circuit 1, and `eval` matched the rule function on all 64 samples. In all it spent about 0.0134 OKB plus gas (the five tape-out transactions were estimated at 2.52 million gas, 0.0001 OKB at 0.04 gwei; the swap is one more), about 1.1 USD.
 
