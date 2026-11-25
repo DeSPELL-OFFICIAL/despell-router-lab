@@ -1,6 +1,6 @@
 // Live run against CoinMarketCap and LI.FI.
 //
-//   CMC_PRO_API_KEY=... node scripts/compare-live.ts NVDA [--spend 100] [--json out.json]
+//   CMC_PRO_API_KEY=... node scripts/compare-live.ts NVDA [--spend 100] [--max-premium 3] [--json out.json]
 //
 // The key is read from the environment only and never printed.
 
@@ -22,6 +22,11 @@ if (!/^\d+(\.\d+)?$/.test(spendArg)) {
   process.exit(1);
 }
 const spendUsd = Number(spendArg);
+const maxPremiumArg = flag("--max-premium");
+if (maxPremiumArg != null && !/^\d+(\.\d+)?$/.test(maxPremiumArg)) {
+  console.error(`--max-premium must be a plain decimal percentage, got ${maxPremiumArg}`);
+  process.exit(1);
+}
 const jsonOut = flag("--json");
 
 const apiKey = process.env.CMC_PRO_API_KEY;
@@ -35,6 +40,7 @@ const result = await compareWrappers({
   quoter: createLifiQuoter(),
   symbol,
   spendUsd,
+  ...(maxPremiumArg != null ? { maxPremiumPct: Number(maxPremiumArg) } : {}),
 });
 
 console.log(formatTable(result));

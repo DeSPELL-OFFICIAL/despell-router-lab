@@ -1,5 +1,5 @@
 {
-  "name": "@despell-router-lab/cmc",
+  "name": "@despell-lab/cmc",
   "private": true,
   "version": "0.1.0",
   "description": "Rank tokenized wrappers of one stock by what $100 actually buys, using CoinMarketCap RWA prices plus route cost.",

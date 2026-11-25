@@ -56,6 +56,14 @@ export class QuoteFailedError extends Error {
   }
 }
 
+/** A quote came back, but without the cost fields needed to price it fully. */
+export class QuoteIncompleteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QuoteIncompleteError";
+  }
+}
+
 interface LifiCost {
   amountUSD?: string;
   included?: boolean;
@@ -72,15 +80,11 @@ export interface LifiQuoteResponse {
   message?: string;
 }
 
-function sumUsd(costs: LifiCost[] | undefined, pick: (c: LifiCost) => boolean): number {
-  let total = 0;
-  for (const c of costs ?? []) {
-    if (!pick(c)) continue;
-    const v = Number(c.amountUSD);
-    if (Number.isFinite(v)) total += v;
-  }
-  return total;
-}
+const usdOf = (c: LifiCost): number | null => {
+  if (c.amountUSD == null || c.amountUSD === "") return null;
+  const v = Number(c.amountUSD);
+  return Number.isFinite(v) ? v : null;
+};
 
 export function parseLifiQuote(body: LifiQuoteResponse): RouteQuote {
   const toAmount = body.estimate?.toAmount;
@@ -88,12 +92,33 @@ export function parseLifiQuote(body: LifiQuoteResponse): RouteQuote {
   if (!toAmount || decimals == null) {
     throw new QuoteFailedError(body.message ?? "LI.FI returned no estimate");
   }
+
+  // Missing cost fields must not quietly count as $0 or as "already included":
+  // both would favour this route. Such a quote is incomplete instead.
+  const gasCosts = body.estimate?.gasCosts ?? [];
+  if (gasCosts.length === 0) throw new QuoteIncompleteError("quote has no gas cost");
+  let gasUsd = 0;
+  for (const g of gasCosts) {
+    const v = usdOf(g);
+    if (v == null) throw new QuoteIncompleteError("a gas cost has no USD amount");
+    gasUsd += v;
+  }
+  let feeUsd = 0;
+  let extraFeeUsd = 0;
+  for (const f of body.estimate?.feeCosts ?? []) {
+    const v = usdOf(f);
+    if (v == null) throw new QuoteIncompleteError("a fee has no USD amount");
+    // LI.FI: `included: true` is already in the quoted amounts; `false` is paid on top of fromAmount.
+    if (f.included === true) feeUsd += v;
+    else if (f.included === false) extraFeeUsd += v;
+    else throw new QuoteIncompleteError("a fee does not say whether it is included");
+  }
+
   return {
     tokensOut: fromBaseUnits(toAmount, decimals),
-    gasUsd: sumUsd(body.estimate?.gasCosts, () => true),
-    // LI.FI: `included: true` is already in the quoted amounts; `false` is paid on top of fromAmount.
-    extraFeeUsd: sumUsd(body.estimate?.feeCosts, (c) => c.included === false),
-    feeUsd: sumUsd(body.estimate?.feeCosts, (c) => c.included !== false),
+    gasUsd,
+    extraFeeUsd,
+    feeUsd,
     tool: body.tool ?? "unknown",
     source: "lifi",
   };

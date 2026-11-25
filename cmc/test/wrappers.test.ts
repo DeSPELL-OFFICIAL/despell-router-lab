@@ -8,9 +8,14 @@ const info = () => cryptoInfoNvda().data!;
 
 test("NVIDIA tokens expand to one wrapper per token per chain", () => {
   const wrappers = groupWrappers(asset(), info());
-  // 9 tokens on CMC; the derivatives index entry has no contract and drops out.
-  assert.equal(wrappers.length, 18);
-  assert.ok(!wrappers.some((w) => w.issuer === "NA (Derivatives)"));
+  // 9 tokens on CMC: 18 deployments, plus the derivatives index entry, which
+  // has no contract and stays as one row saying so.
+  assert.equal(wrappers.length, 19);
+  const derivatives = wrappers.filter((w) => w.issuer === "NA (Derivatives)");
+  assert.equal(derivatives.length, 1);
+  assert.equal(derivatives[0]!.listing, "no_contract");
+  assert.equal(derivatives[0]!.chainName, null);
+  assert.equal(wrappers.filter((w) => w.listing === "deployed").length, 18);
 
   const nvdax = wrappers.filter((w) => w.symbol === "NVDAX");
   assert.deepEqual(
@@ -51,6 +56,16 @@ test("a chain name CMC uses that is not in the table is unknown, not non-EVM", (
   const w = groupWrappers(asset(), info).find((x) => x.symbol === "NVDAc")!;
   assert.equal(w.chainKind, "unknown");
   assert.equal(w.chainId, null);
+});
+
+test("a token missing from crypto info is kept as a row, not dropped", () => {
+  const partial = info();
+  delete partial["42461"]; // NVDAc
+  const rows = groupWrappers(asset(), partial).filter((w) => w.symbol === "NVDAc");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.listing, "no_info");
+  assert.equal(rows[0]!.address, null);
+  assert.equal(rows[0]!.issuer, "Coinbase");
 });
 
 test("an asset without a tokens array gives no wrappers", () => {

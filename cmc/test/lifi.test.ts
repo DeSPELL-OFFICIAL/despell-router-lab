@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createLifiQuoter, NoRouteError, parseLifiQuote, QuoteFailedError, UnsupportedChainError } from "../src/lifi.ts";
+import { createLifiQuoter, NoRouteError, parseLifiQuote, QuoteFailedError, QuoteIncompleteError, UnsupportedChainError } from "../src/lifi.ts";
 import { fakeFetch, lifiQuoteNvdax } from "./helpers.ts";
 
 // NVDAx (Backed xStock) contract, same address on Ethereum and BNB Smart Chain.
@@ -66,4 +66,17 @@ test("404 means no route; other failures mean the quote failed", async () => {
 
   await assert.rejects(createLifiQuoter({ fetch: notFound.fetch })({ chainId: 424242, tokenAddress: NVDAX, spendUsd: 100 }), UnsupportedChainError);
   assert.throws(() => parseLifiQuote({}), QuoteFailedError);
+});
+
+test("missing cost fields make a quote incomplete instead of free", () => {
+  const withGas = (gasCosts: unknown) => ({ ...lifiQuoteNvdax(), estimate: { ...lifiQuoteNvdax().estimate, gasCosts } }) as Parameters<typeof parseLifiQuote>[0];
+  const withFees = (feeCosts: unknown) => ({ ...lifiQuoteNvdax(), estimate: { ...lifiQuoteNvdax().estimate, feeCosts } }) as Parameters<typeof parseLifiQuote>[0];
+
+  assert.throws(() => parseLifiQuote(withGas([])), QuoteIncompleteError);
+  assert.throws(() => parseLifiQuote(withGas([{ type: "SEND" }])), QuoteIncompleteError);
+  assert.throws(() => parseLifiQuote(withGas([{ type: "SEND", amountUSD: "n/a" }])), QuoteIncompleteError);
+  assert.throws(() => parseLifiQuote(withFees([{ amountUSD: "0.25" }])), /whether it is included/);
+  assert.throws(() => parseLifiQuote(withFees([{ included: true }])), QuoteIncompleteError);
+  // No fees at all is fine.
+  assert.equal(parseLifiQuote(withFees([])).feeUsd, 0);
 });

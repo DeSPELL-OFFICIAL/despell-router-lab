@@ -11,26 +11,32 @@ A wrapper that trades below the stock can still lose once you pay to get into it
 
 ## The numbers
 
-For each wrapper, with `ref` = the reference price of the stock and `p` = the wrapper's CMC price:
+For each wrapper, with `ref` = the reference price of the stock, and a quote that turns $100 into `tokensOut` with fees taken inside the route (`fees in`) and costs paid on top (`gas`, `fees on top`):
 
 | Field | Formula |
 | --- | --- |
-| on top | `gas + fees charged on top of the spend` (LI.FI `included: false`) |
-| premium | `(p / ref - 1) * 100` |
-| route cost | `$100 - tokensOut * p + on top` (DEX fees and price impact, plus what is paid on top) |
-| receives | `tokensOut * ref - on top` (the stock exposure you hold, net of what is paid on top) |
+| execution price | `($100 - fees in) / tokensOut`, the price this route pays per token |
+| premium | `(execution price / ref - 1) * 100` |
+| receives | `tokensOut * ref - (gas + fees on top)`, the stock exposure you hold |
+| short | `$100 - receives`, always in ranking order |
+| known cost | `gas + fees on top + fees in` |
+| price gap | `short - known cost` = `tokensOut * (execution price - ref)`, negative when the route pays below `ref` |
 
-`ref` defaults to CMC's `average_tokenized_price` for the asset, because the RWA endpoints do not return the exchange-listed stock price. Pass `referencePriceUsd` to use another one. One token is taken as one share.
+`ref` defaults to CMC's `average_tokenized_price` for the asset, because the RWA endpoints do not return the exchange-listed stock price. Pass `referencePriceUsd` to use another one. One token is taken as one share. The wrapper's own CMC price is reported (`cmcPremiumPct`) but not used to rank: it can lag the price you would actually pay.
 
-Wrappers that cannot be ranked are kept and listed last, with the reason:
+A route paying more than 3% away from `ref` (`maxPremiumPct`, 2 or 3 is sensible) is not ranked. Paying well below the stock is not a cheaper share: it is a token worth less than one share, a depeg, or a bad quote. For the same reason a row that receives more than it spent is ranked but never marked best. Rows within $0.05 of the best (`tieUsd`) are marked as tied. If any quote failed or came back without its cost fields, `incomplete` counts those rows and no row is marked best.
+
+Rows that cannot be ranked are kept and listed last, with the reason:
 
 | Reason | Meaning |
 | --- | --- |
+| `no_contract` | CMC lists the token but gives no contract address (or no info at all) |
 | `non_evm_chain` | Solana, TON: no EVM route quote |
 | `unsupported_chain` | EVM or unrecognised chain with no quote source wired yet |
 | `no_route` | LI.FI answered 404: no route for this pair |
-| `quote_failed` | rate limit, server error or network drop; the table warns, since a better wrapper may be missing |
-| `implausible_quote` | CMC price more than 20% off the stock (not 1 token = 1 share), or the quoted tokens are worth more than 20% off the spend (bad decimals) |
+| `quote_failed` | rate limit, server error or network drop; makes the ranking incomplete |
+| `quote_incomplete` | gas without a USD amount, or a fee that does not say whether it is included; makes the ranking incomplete |
+| `premium_out_of_band` | the route pays more than `maxPremiumPct` away from the stock |
 
 ## Use
 
@@ -39,7 +45,7 @@ Node 24 runs the TypeScript directly; there are no runtime dependencies. TypeScr
 ```bash
 pnpm install && pnpm test && pnpm typecheck # fixtures only, no network
 CMC_PRO_API_KEY=... pnpm compare NVDA       # live: CoinMarketCap + LI.FI
-node --env-file=<a file outside this repo> scripts/compare-live.ts NVDA --json out.json
+node --env-file=<a file outside this repo> scripts/compare-live.ts NVDA --max-premium 2 --json out.json
 ```
 
 The key is read only from the `CMC_PRO_API_KEY` environment variable and only sent as the `X-CMC_PRO_API_KEY` header. It is never stored in this repository.
@@ -65,7 +71,7 @@ Nothing here signs or sends a transaction. Route quotes use a placeholder sender
 | `src/wrappers.ts` | token × chain grouping |
 | `src/chains.ts` | CMC platform names to EVM chain ids; USDC per chain |
 | `src/lifi.ts` | LI.FI route quotes |
-| `src/rank.ts` | premium, route cost, received value, order |
+| `src/rank.ts` | premium, received value, short split, band, best and ties |
 | `src/compare.ts` | the whole flow in one call |
 | `src/format.ts` | plain-text table |
 | `test/fixtures/` | CMC and LI.FI responses recorded on 2026-11-25, trimmed to the fields read |
