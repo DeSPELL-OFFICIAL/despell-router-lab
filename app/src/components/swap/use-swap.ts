@@ -48,7 +48,13 @@ type Frozen = { plan: SwapPlan; simulation: Extract<Simulation, { ok: true }> };
 /** The pools a page leaves out, as a stable key for queries. */
 const leaveOutKey = (ids: readonly Hex[]) => [...new Set(ids.map((id) => id.toLowerCase()))].sort().join(",");
 
-export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate, leaveOut: readonly Hex[] | null = []) {
+export function useSwap(
+  chain: SwapChain,
+  amountIn: bigint,
+  gate: ContestGate,
+  leaveOut: readonly Hex[] | null = [],
+  recheckLeaveOut?: () => Promise<readonly Hex[]>,
+) {
   const wagmiClient = usePublicClient({ chainId: chain.id });
   const client = wagmiClient as unknown as PublicClient | undefined;
   const connection = useConnection();
@@ -81,15 +87,32 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate, l
   useEffect(() => {
     leaveOutRef.current = outKey;
   }, [outKey]);
+  const recheckRef = useRef(recheckLeaveOut);
+  useEffect(() => {
+    recheckRef.current = recheckLeaveOut;
+  }, [recheckLeaveOut]);
 
-  /** Why this plan must not be signed now because its pool is left out (or unknown), or null. */
+  /** Why this plan must not be signed now because its pool is left out (or unknown, or not readable), or null. */
   function poolStopReason(plan: SwapPlan): string | null {
     if (chain.dex !== "uniswap-v4") return null;
     const out = leaveOutRef.current;
     if (out === null) return "waiting to learn which pools are left out";
-    const pool = decodePlan(chain, plan.steps).swap.pool;
+    let pool: Hex | undefined;
+    try {
+      pool = decodePlan(chain, plan.steps).swap.pool;
+    } catch (error) {
+      return `these transactions do not match the card: ${firstLine(error)}`;
+    }
     if (pool && out.split(",").includes(pool.toLowerCase())) return `${v4Pool(chain, pool)?.label ?? pool} was left out of the route`;
     return null;
+  }
+
+  /** Before each transaction: the page's fresh read of which pools are left out, then the same check on it. */
+  async function freshPoolCheck(plan: SwapPlan): Promise<string | null> {
+    const recheck = recheckRef.current;
+    if (!recheck) return null;
+    leaveOutRef.current = leaveOutKey(await recheck());
+    return poolStopReason(plan);
   }
 
   const quoteQ = useQuery({
@@ -182,6 +205,7 @@ export function useSwap(chain: SwapChain, amountIn: bigint, gate: ContestGate, l
         wait: (hash) => waitFor(hash),
         nonceOf: (hash) => client.getTransaction({ hash }).then((t) => t.nonce),
         stopReason: () => (!alive.current ? "the card was closed" : (gateStopReason(gateRef.current) ?? poolStopReason(plan))),
+        freshCheck: chain.dex === "uniswap-v4" && recheckRef.current ? () => freshPoolCheck(plan) : undefined,
         onPhase: (p) => {
           if (alive.current) setPhase(p);
         },

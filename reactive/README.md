@@ -219,7 +219,7 @@ node --env-file=<your env file> scripts/with-key.mjs -- forge script script/SetF
 | `Launch.s.sol` | Mines the hook address, deploys the hook, initializes the pool, seeds ETH (3 transactions) | `SEED_WEI` |
 | `LaunchSecondPool.s.sol` | Opens test pool B on the same hook at pool A's price and seeds ETH (2 transactions) | `SEED_WEI` |
 | `SetFee.s.sol` | Changes the LP fee (1 transaction, one `FeeUpdated`) | `NEW_FEE` (500 = 0.05%, 100000 = 10%), `TICK_SPACING` (10 = pool A, the default; 60 = pool B) |
-| `Seed.s.sol` | Adds another ETH-only position at the current price | `SEED_WEI` |
+| `Seed.s.sol` | Adds another ETH-only position at the current price | `SEED_WEI`, `TICK_SPACING` |
 | `Quote.s.sol` | Read-only: pool state and a USDC → ETH quote | `USDC_IN` (default 10 USDC), `TICK_SPACING` |
 | `Status.s.sol` | Read-only: the deployer's balances | — |
 | `BridgeToBaseSepolia.s.sol` | Moves test ETH from Ethereum Sepolia through Base's official bridge | `BRIDGE_WEI` |

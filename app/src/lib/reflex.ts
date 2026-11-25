@@ -20,7 +20,7 @@ export type JournalEntry = {
   change: { kind: string; oldFee: number; newFee: number; label: string } | null;
   origin: (TxRef & { reactscan: string }) | null;
   reactive: TxRef | null;
-  /** `newStatus`: the status PoolGuard's Marked event set, recorded by measurements from DES-700 on. */
+  /** `newStatus`: the status PoolGuard's Marked event set, when the measurement recorded it (later runs do). */
   mark: (TxRef & { newStatus?: number }) | null;
   seconds: number | null;
   blocks: number | null;

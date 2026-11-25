@@ -179,6 +179,14 @@ contract TestPoolForkTest is Test {
         SetFee setFee = new SetFee();
         vm.expectRevert("TICK_SPACING must be 10 (first pool) or 60 (second pool)");
         setFee.setFee(hook, 3000, 30);
+
+        // Seed takes the same choice: more ETH in the second pool, none in the first.
+        IPoolManager manager = IPoolManager(BaseSepolia.POOL_MANAGER);
+        uint128 firstBefore = manager.getLiquidity(first);
+        uint256 out = _quote10(BaseSepolia.poolKey(hook, BaseSepolia.SECOND_TICK_SPACING));
+        new Seed().seed(hook, 0.05 ether, BaseSepolia.SECOND_TICK_SPACING);
+        assertGt(_quote10(BaseSepolia.poolKey(hook, BaseSepolia.SECOND_TICK_SPACING)), out, "deeper, so it pays more");
+        assertEq(manager.getLiquidity(first), firstBefore);
     }
 
     /// @notice Pool B on the live hook beside the live pool A: opened at A's price (rehearsed here with the live owner

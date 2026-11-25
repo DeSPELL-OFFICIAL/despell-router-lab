@@ -11,7 +11,8 @@ import type { ContestGate } from "./swap/view";
   card's trade is 10 USDC (PoolReflex never writes 1).
 
   Fail-closed: until the first read answers, nothing is quoted; while reads
-  fail, the sign button stays off.
+  fail, or the last answer is older than MARKS_MAX_AGE_MS, the sign button
+  stays off. Signing reads the marks again right before every transaction.
 */
 
 export const OPEN = 0;
@@ -20,6 +21,8 @@ export const BLOCKED = 3;
 
 /** How often the card reads the marks. A mark lands about a second after a pool change (reactive/deployments). */
 export const MARKS_POLL_MS = 2_000;
+/** A read older than this no longer opens the gate: three polls missed. */
+export const MARKS_MAX_AGE_MS = 6_000;
 
 export const poolGuardAbi = [
   {
@@ -51,10 +54,16 @@ export type PoolMark = {
   originTx: Hex;
 };
 
-export type MarksRead = { block: bigint; timestamp: number; marks: PoolMark[] };
+export type MarksRead = {
+  block: bigint;
+  timestamp: number;
+  marks: PoolMark[];
+  /** Client clock (ms) when the answer arrived: how old the read is, whatever the chain's clock says. */
+  receivedAt: number;
+};
 
 /** Reads every listed pool's mark at the latest block. */
-export async function readMarks(client: PublicClient, chain: BaseSepoliaSwap): Promise<MarksRead> {
+export async function readMarks(client: PublicClient, chain: BaseSepoliaSwap, nowMs: () => number = Date.now): Promise<MarksRead> {
   const head = await client.getBlock({ blockTag: "latest" });
   const results = await client.multicall({
     contracts: chain.pools.map((pool) => ({ address: chain.poolGuard, abi: poolGuardAbi, functionName: "markOf", args: [pool.id] }) as const),
@@ -65,6 +74,7 @@ export async function readMarks(client: PublicClient, chain: BaseSepoliaSwap): P
     block: head.number,
     timestamp: Number(head.timestamp),
     marks: chain.pools.map((pool, i) => ({ pool, status: results[i].status, markedAt: Number(results[i].markedAt), originTx: results[i].originTx })),
+    receivedAt: nowMs(),
   };
 }
 
@@ -77,15 +87,16 @@ export function leftOut(read: MarksRead): PoolMark[] {
 
 /**
  * The card's gate from the latest read. `failing`: the latest read failed (an earlier one may still be on screen).
- * Only a fresh read with at least one pool still in the route lets the sign button turn on.
+ * Only a fresh read (no failure, at most MARKS_MAX_AGE_MS old at `nowMs`) with at least one pool still in the route
+ * lets the sign button turn on.
  */
-export function markGate(read: MarksRead | null, failing: boolean, chain: BaseSepoliaSwap): ContestGate {
+export function markGate(read: MarksRead | null, failing: boolean, chain: BaseSepoliaSwap, nowMs: number): ContestGate {
   if (!read) {
     return failing
       ? { state: "hold", title: "Could not read the on-chain marks", items: `· PoolGuard ${short(chain.poolGuard)} · nothing is quoted until it answers` }
       : { state: "pending", label: "the on-chain marks" };
   }
-  if (failing) return { state: "pending", label: "a fresh read of the on-chain marks" };
+  if (failing || nowMs - read.receivedAt > MARKS_MAX_AGE_MS) return { state: "pending", label: "a fresh read of the on-chain marks" };
   if (leftOut(read).length === read.marks.length) return { state: "hold", title: "No route", items: "· every pool is marked on-chain" };
   return { state: "ok" };
 }

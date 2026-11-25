@@ -75,6 +75,41 @@ describe("runSigning", () => {
     expect(h.sent).toHaveLength(1);
   });
 
+  it("awaits the contest's fresh check before each simulation, and stops on its reason", async () => {
+    const order: string[] = [];
+    let marked = false;
+    const h = harness({
+      afterConfirm: (step) => {
+        if (step === 0) marked = true;
+      },
+      freshCheck: async () => {
+        order.push("check");
+        return marked ? "test pool A was left out of the route" : null;
+      },
+    });
+    const simulate = h.deps.simulate;
+    h.deps.simulate = async (from, minBlock) => {
+      order.push("simulate");
+      return simulate(from, minBlock);
+    };
+    const result = await runSigning(plan, h.deps);
+    expect(result).toEqual({ kind: "stopped", step: 1, reason: "test pool A was left out of the route" });
+    expect(order).toEqual(["check", "simulate", "check"]);
+    expect(h.sent).toHaveLength(1);
+  });
+
+  it("stops when the fresh check cannot be made", async () => {
+    const h = harness({
+      freshCheck: async () => {
+        throw new Error("HTTP 429\nmore");
+      },
+    });
+    const result = await runSigning(plan, h.deps);
+    expect(result).toEqual({ kind: "stopped", step: 0, reason: "the check before signing failed: HTTP 429" });
+    expect(h.sent).toHaveLength(0);
+    expect(h.simulatedFrom).toHaveLength(0);
+  });
+
   it("stops when the card goes away while a transaction confirms", async () => {
     let gone = false;
     const h = harness({ afterConfirm: () => (gone = true), stopReason: () => (gone ? "the card was closed" : null) });

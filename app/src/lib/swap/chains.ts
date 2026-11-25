@@ -61,7 +61,7 @@ export type SwapChain = BaseSepoliaSwap | GiwaSepoliaSwap;
 
 const ETH = "0x0000000000000000000000000000000000000000" as const;
 const BASE_SEPOLIA_USDC = getAddress("0x036CbD53842c5426634e7929541eC2318f3dCF7e");
-/** The DES-695 hook: it sets each pool's LP fee and emits FeeUpdated, which PoolReflex watches for every pool on it. */
+/** The test pools' hook: it sets each pool's LP fee and emits FeeUpdated, which PoolReflex watches for every pool on it. */
 const FEE_HOOK = getAddress("0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000");
 /** Uniswap v4's flag for a fee the hook sets (LPFeeLibrary.DYNAMIC_FEE_FLAG). */
 const DYNAMIC_FEE = 0x800000;
@@ -79,7 +79,7 @@ export const BASE_SEPOLIA: BaseSepoliaSwap = {
   quoter: getAddress("0x5e6B8B8AFA7e5CEF6C09dd2A67aBA9FB12C75623"),
   stateView: getAddress("0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4"),
   // Two ETH/USDC test pools on the same hook, so PoolReflex watches both: A (reactive/deployments/base-sepolia.json)
-  // and B, added for DES-700 (reactive/script/LaunchSecondPool.s.sol). Ids are keccak256 of the keys (chains.test.ts).
+  // and B, the quote's second route (reactive/script/LaunchSecondPool.s.sol). Ids are keccak256 of the keys (chains.test.ts).
   pools: [
     {
       id: "0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4",

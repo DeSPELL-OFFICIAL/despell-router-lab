@@ -14,7 +14,7 @@
 //
 // Six Base Sepolia transactions from the owner: initialize and seed B, A's fee to 10% and back, reopen B, reopen A.
 // The reactions (Lasna) and the marks (Base Sepolia) come from Reactive Network. The record is written after every step.
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BASE_RPC, blockOf, feeOf, forgeSend, HOOK, POOL_B_ID, POOL_ID, precheck, rpc, sleep, statusInLog, statusOf, waitForMark } from "./chain.mjs";
@@ -31,6 +31,7 @@ const MARK_TIMEOUT_MS = 180_000;
 const REACTIONS = 3n; // B's opening, A to 10%, A back to 0.05%
 const LREACT_PER_REACTION = 20_000_000_000_000_000n; // 0.02 lREACT
 const GAS_WEI = 200_000_000_000_000n; // 0.0002 ETH for six transactions, with room
+const STATES = ["no-route", "left-out", "both-open"];
 
 const env = process.env;
 const GUARD = must("GUARD");
@@ -106,7 +107,8 @@ async function answer(step, pool, origin) {
 async function hold(state) {
   const statuses = { A: await statusOf(GUARD, POOL_ID), B: await statusOf(GUARD, POOL_B_ID) };
   const signal = join(SIGNAL_DIR, `${state}.done`);
-  record.waitingFor = { state, statuses, since: new Date().toISOString(), signal };
+  // The record is committed: it names the state, never a path on this machine.
+  record.waitingFor = { state, statuses, since: new Date().toISOString() };
   save();
   log(`state ${state} (A ${statuses.A}, B ${statuses.B}) · holding until ${signal} exists, at most ${HOLD_MS / 60_000} min`);
   const until = Date.now() + HOLD_MS;
@@ -124,6 +126,8 @@ function stop(msg) {
 
 async function main() {
   mkdirSync(SIGNAL_DIR, { recursive: true });
+  // A signal left from an earlier run would release a state before it is captured.
+  for (const state of STATES) rmSync(join(SIGNAL_DIR, `${state}.done`), { force: true });
   log(`hook ${HOOK} · PoolGuard ${GUARD} · PoolReflex ${REFLEX} · pool B seed ${SEED_WEI} wei`);
   if (await initialized(POOL_B_ID)) fail(`pool B ${POOL_B_ID} is already initialized; this demo opens it`);
   if ((await feeOf(POOL_ID)) !== LOW_FEE) fail(`pool A's fee is not ${LOW_FEE}; set it back first`);
@@ -153,7 +157,9 @@ async function main() {
   // 4. A's fee back to 0.05%: another change, so PoolGuard keeps A narrowed (MarkKept). Wait for it before reopening,
   //    or a late callback would mark A again after the reopen.
   const lowered = await send("pool A fee 10% -> 0.05%", POOL_DIR, "script/SetFee.s.sol", { HOOK, NEW_FEE: String(LOW_FEE) });
-  await answer(lowered.step, POOL_ID, lowered.sent);
+  if ((await answer(lowered.step, POOL_ID, lowered.sent)).result.startsWith("no mark")) {
+    stop("no answer to pool A's fee change back; not reopening A, or the late answer would mark it again after");
+  }
 
   // 5. The operator reopens A: both pools are open, and the quote goes through A, which pays more.
   await send("reopen pool A", REFLEX_DIR, "script/Reopen.s.sol", { GUARD, POOL_ID });

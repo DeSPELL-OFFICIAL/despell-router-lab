@@ -24,6 +24,11 @@ export type SwapCardProps = {
    * them is not signed. `null` while the check has not answered yet (no quote is read). Default: none.
    */
   leaveOut?: readonly Hex[] | null;
+  /**
+   * Base Sepolia: reads the pools to leave out again, awaited right before each transaction is simulated and sent.
+   * A plan through a pool it returns is not sent; a failed read stops signing.
+   */
+  recheckLeaveOut?: () => Promise<readonly Hex[]>;
   /** Cancel closes the card. Leave it out while another card is signing. */
   onCancel?: () => void;
   /** Told when this card starts and stops signing, so the page can keep other controls still. */
@@ -31,8 +36,8 @@ export type SwapCardProps = {
 };
 
 /** A live USDC -> ETH signing card on one test network. */
-export function SwapCard({ chain, amountIn, extraRows, gate, leaveOut = [], onCancel, onBusyChange }: SwapCardProps) {
-  const swap = useSwap(chain, amountIn, gate, leaveOut);
+export function SwapCard({ chain, amountIn, extraRows, gate, leaveOut = [], recheckLeaveOut, onCancel, onBusyChange }: SwapCardProps) {
+  const swap = useSwap(chain, amountIn, gate, leaveOut, recheckLeaveOut);
   const phaseKind = swap.state.phase.kind;
   useEffect(() => {
     onBusyChange?.(phaseKind === "signing" || phaseKind === "unconfirmed");

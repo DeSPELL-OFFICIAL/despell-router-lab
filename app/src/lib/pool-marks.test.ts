@@ -1,11 +1,12 @@
 import type { Hex, PublicClient } from "viem";
 import { describe, expect, it } from "vitest";
-import { agoText, leftOut, markGate, markNote, readMarks, type MarksRead } from "./pool-marks";
+import { agoText, leftOut, markGate, markNote, MARKS_MAX_AGE_MS, readMarks, type MarksRead } from "./pool-marks";
 import { BASE_SEPOLIA } from "./swap/chains";
 
 const [A, B] = BASE_SEPOLIA.pools;
 const TX = `0x${"ab".repeat(32)}` as Hex;
 const ZERO = `0x${"00".repeat(32)}` as Hex;
+const NOW = 1_795_700_100_000; // client clock, ms
 
 function readOf(statusA: number, statusB: number, timestamp = 1_795_700_100): MarksRead {
   return {
@@ -15,6 +16,7 @@ function readOf(statusA: number, statusB: number, timestamp = 1_795_700_100): Ma
       { pool: A, status: statusA, markedAt: statusA ? timestamp - 12 : 0, originTx: statusA ? TX : ZERO },
       { pool: B, status: statusB, markedAt: statusB ? timestamp - 300 : 0, originTx: statusB ? TX : ZERO },
     ],
+    receivedAt: NOW,
   };
 }
 
@@ -31,7 +33,7 @@ describe("readMarks", () => {
         ];
       },
     } as unknown as PublicClient;
-    const read = await readMarks(client, BASE_SEPOLIA);
+    const read = await readMarks(client, BASE_SEPOLIA, () => NOW);
     expect(read).toEqual({
       block: 100n,
       timestamp: 1_795_700_100,
@@ -39,6 +41,7 @@ describe("readMarks", () => {
         { pool: A, status: 2, markedAt: 1_795_700_088, originTx: TX },
         { pool: B, status: 0, markedAt: 0, originTx: ZERO },
       ],
+      receivedAt: NOW,
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
@@ -63,18 +66,25 @@ describe("leftOut", () => {
 
 describe("markGate", () => {
   it("waits for the first read, and holds if it fails", () => {
-    expect(markGate(null, false, BASE_SEPOLIA)).toEqual({ state: "pending", label: "the on-chain marks" });
-    expect(markGate(null, true, BASE_SEPOLIA)).toMatchObject({ state: "hold", title: "Could not read the on-chain marks" });
+    expect(markGate(null, false, BASE_SEPOLIA, NOW)).toEqual({ state: "pending", label: "the on-chain marks" });
+    expect(markGate(null, true, BASE_SEPOLIA, NOW)).toMatchObject({ state: "hold", title: "Could not read the on-chain marks" });
   });
 
   it("allows signing only on a fresh read that leaves a pool in the route", () => {
-    expect(markGate(readOf(0, 0), false, BASE_SEPOLIA)).toEqual({ state: "ok" });
-    expect(markGate(readOf(2, 0), false, BASE_SEPOLIA)).toEqual({ state: "ok" });
-    expect(markGate(readOf(0, 0), true, BASE_SEPOLIA)).toEqual({ state: "pending", label: "a fresh read of the on-chain marks" });
+    expect(markGate(readOf(0, 0), false, BASE_SEPOLIA, NOW)).toEqual({ state: "ok" });
+    expect(markGate(readOf(2, 0), false, BASE_SEPOLIA, NOW)).toEqual({ state: "ok" });
+    expect(markGate(readOf(0, 0), true, BASE_SEPOLIA, NOW)).toEqual({ state: "pending", label: "a fresh read of the on-chain marks" });
+  });
+
+  // A read that stopped coming (a hung request is neither data nor an error) must not keep the button on.
+  it("waits for a fresh read once the last answer is older than six seconds", () => {
+    expect(markGate(readOf(0, 0), false, BASE_SEPOLIA, NOW + MARKS_MAX_AGE_MS)).toEqual({ state: "ok" });
+    expect(markGate(readOf(0, 0), false, BASE_SEPOLIA, NOW + MARKS_MAX_AGE_MS + 1)).toEqual({ state: "pending", label: "a fresh read of the on-chain marks" });
+    expect(MARKS_MAX_AGE_MS).toBe(6_000);
   });
 
   it("stops with no route when every pool is marked", () => {
-    expect(markGate(readOf(2, 3), false, BASE_SEPOLIA)).toEqual({ state: "hold", title: "No route", items: "· every pool is marked on-chain" });
+    expect(markGate(readOf(2, 3), false, BASE_SEPOLIA, NOW)).toEqual({ state: "hold", title: "No route", items: "· every pool is marked on-chain" });
   });
 });
 
