@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {console} from "forge-std/Script.sol";
 
+import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 
@@ -16,7 +17,10 @@ import {TestPoolScript} from "./TestPoolScript.sol";
 ///      (run through scripts/with-key.mjs; the hook comes from HOOK or deployments/base-sepolia.json)
 contract SetFee is TestPoolScript {
     function run() external returns (uint24 oldFee, uint24 newFee) {
-        return setFee(DynamicFeeHook(address(_hook())), uint24(vm.envUint("NEW_FEE")));
+        uint256 fee = vm.envUint("NEW_FEE");
+        // Check before narrowing: a mistyped value must not wrap into some other valid fee.
+        require(fee <= LPFeeLibrary.MAX_LP_FEE, "NEW_FEE above 1000000 (100%)");
+        return setFee(DynamicFeeHook(address(_hook())), uint24(fee));
     }
 
     function setFee(DynamicFeeHook hook, uint24 fee) public returns (uint24 oldFee, uint24 newFee) {

@@ -15,11 +15,13 @@ import {TestPoolScript} from "./TestPoolScript.sol";
 
 /// @notice Read-only: prints the test pool's state from Uniswap's StateView and a USDC -> ETH quote from
 ///         Uniswap's V4Quoter. Sends nothing and needs no key.
-/// @dev forge script script/Quote.s.sol --rpc-url base_sepolia        (USDC_IN defaults to 100 USDC)
+/// @dev forge script script/Quote.s.sol --rpc-url base_sepolia        (USDC_IN defaults to 10 USDC)
 ///      Add `--fork-block-number <n>` to read the pool as it was at block n.
 contract Quote is TestPoolScript {
     function run() external returns (uint24 lpFee, uint256 ethOut) {
-        return quote(_hook(), uint128(vm.envOr("USDC_IN", uint256(100e6))));
+        uint256 usdcIn = vm.envOr("USDC_IN", uint256(10e6));
+        require(usdcIn <= type(uint128).max, "USDC_IN too large");
+        return quote(_hook(), uint128(usdcIn));
     }
 
     function quote(IHooks hook, uint128 usdcIn) public returns (uint24 lpFee, uint256 ethOut) {

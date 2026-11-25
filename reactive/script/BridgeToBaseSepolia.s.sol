@@ -17,12 +17,14 @@ contract BridgeToBaseSepolia is Script {
     uint256 internal constant SEPOLIA_CHAIN_ID = 11155111;
     IL1StandardBridge internal constant BRIDGE = IL1StandardBridge(0xfd0Bf71F60660E2f608ed56e1659C450eB113120);
     uint32 internal constant MIN_GAS_LIMIT = 200_000;
+    /// @dev Left on Sepolia to pay for the deposit itself (it used about 0.00005 ETH on 2026-11-26).
+    uint256 internal constant GAS_RESERVE = 0.001 ether;
 
     function run() external {
         require(block.chainid == SEPOLIA_CHAIN_ID, "not Ethereum Sepolia");
         uint256 amount = vm.envUint("BRIDGE_WEI");
         uint256 pk = vm.envUint("PRIVATE_KEY");
-        require(amount > 0 && amount <= vm.addr(pk).balance, "bad amount");
+        require(amount > 0 && amount + GAS_RESERVE <= vm.addr(pk).balance, "BRIDGE_WEI leaves no gas");
 
         vm.startBroadcast(pk);
         BRIDGE.depositETH{value: amount}(MIN_GAS_LIMIT, "");

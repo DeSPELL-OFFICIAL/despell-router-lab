@@ -13,6 +13,10 @@ import { createInterface } from "node:readline";
 const args = process.argv.slice(2);
 let from = "PRIVATE_KEY";
 if (args[0] === "--from") {
+  if (!args[1] || args[1] === "--") {
+    console.error("with-key: --from needs a variable name");
+    process.exit(2);
+  }
   from = args[1];
   args.splice(0, 2);
 }

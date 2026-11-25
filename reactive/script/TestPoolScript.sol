@@ -61,10 +61,12 @@ abstract contract TestPoolScript is Script {
         params[1] = abi.encode(key.currency0, key.currency1);
         params[2] = abi.encode(key.currency0, recipient);
 
+        // Read during simulation: if another mint lands first, the real id is higher. The receipt's
+        // Transfer event has the real one.
         tokenId = POSITION_MANAGER.nextTokenId();
         POSITION_MANAGER.modifyLiquidities{value: amount0Max}(abi.encode(actions, params), block.timestamp + 600);
 
-        console.log("seed position id:", tokenId);
+        console.log("seed position id (expected):", tokenId);
         console.log("seed ETH (wei):", amountWei);
         console.log("seed liquidity:", liquidity);
         console.log("seed ticks lower/upper:");

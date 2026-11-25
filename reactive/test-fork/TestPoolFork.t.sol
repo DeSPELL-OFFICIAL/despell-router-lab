@@ -47,6 +47,7 @@ contract TestPoolForkTest is Test {
 
     function test_launch_deploysHookPoolAndEthOnlySeed() public {
         uint256 nextId = IPositionManager(BaseSepolia.POSITION_MANAGER).nextTokenId();
+        uint256 dustInPositionManager = BaseSepolia.POSITION_MANAGER.balance;
         vm.recordLogs();
         (DynamicFeeHook hook, PoolId poolId) = _launch(0.01 ether);
 
@@ -71,9 +72,11 @@ contract TestPoolForkTest is Test {
         assertEq(posm.nextTokenId(), nextId + 1, "one position minted");
         assertGt(posm.getPositionLiquidity(nextId), 0);
         assertGt(IPoolManager(BaseSepolia.POOL_MANAGER).getLiquidity(poolId), 0, "seed is in range");
-        // SWEEP returns the rounding spare (and any dust others left in the PositionManager), so the deployer
-        // spends the seed give or take a few wei. Gas is free in this test.
-        assertApproxEqAbs(1 ether - deployer.balance, 0.01 ether, 1e9);
+        // Liquidity rounds down, so the pool takes a little less than the seed; SWEEP returns that spare and any
+        // ETH others left in the PositionManager. The deployer never pays more than the seed + 1 wei (gas is free here).
+        uint256 spent = 1 ether + dustInPositionManager - deployer.balance;
+        assertLe(spent, 0.01 ether + 1);
+        assertApproxEqAbs(spent, 0.01 ether, 1e9);
     }
 
     function test_setFee_changesFeeThatStateViewAndQuoterSee() public {

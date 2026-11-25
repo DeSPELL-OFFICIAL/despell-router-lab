@@ -25,7 +25,9 @@ contract DynamicFeeHook is BaseHook {
     /// @notice LP fee every pool starts with, in hundredths of a bip (500 = 0.05%).
     uint24 public immutable initialFee;
 
-    /// @notice A pool's LP fee changed. Also emitted when a new pool gets its first fee (`oldFee` is then 0).
+    /// @notice A pool's LP fee changed. Every change emits exactly one of these, including the first fee a new
+    ///         pool gets, which comes in the same transaction as the PoolManager's `Initialize` event.
+    ///         `oldFee == 0` alone does not mean a new pool: a pool whose fee was set to 0 reports 0 as well.
     /// @param poolId The v4 pool id (`keccak256(abi.encode(poolKey))`).
     /// @param oldFee The fee before the change, in hundredths of a bip.
     /// @param newFee The fee after the change, in hundredths of a bip.
