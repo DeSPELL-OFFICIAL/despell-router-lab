@@ -68,6 +68,35 @@ code { font-family: var(--ds-font-mono); font-size: 0.92em; }
 .lab-tile .lab-tile-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--ds-fg-dim); }
 .lab-tile .lab-tile-foot span:last-child { color: var(--ds-accent-ink); }
 
+/* header wallet button and its list */
+.lab-wallet { position: relative; }
+.lab-wallet-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
+  display: grid; gap: 8px; width: 280px; padding: 12px;
+  border-radius: var(--ds-r-card); border: 1px solid var(--ds-line-4); background: var(--ds-bg);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+}
+.lab-wallet-line { margin: 0; display: grid; gap: 2px; font-size: 12.5px; }
+.lab-wallet-option { justify-content: flex-start; }
+.lab-wallet-option img { border-radius: 4px; }
+.lab-wallet-error { font-size: 12px; color: var(--ds-danger); overflow-wrap: anywhere; }
+.lab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ds-accent-ink); }
+.lab-dot.is-off { background: var(--ds-warn); }
+
+/* /swap */
+.lab-intents { display: flex; flex-wrap: wrap; gap: 8px; }
+.lab-intent {
+  padding: 8px 14px; border-radius: var(--ds-r-pill); border: 1px solid var(--ds-line-4); background: var(--ds-glass);
+  color: var(--ds-fg); font: inherit; font-size: 14px; cursor: pointer;
+}
+.lab-intent:hover { border-color: var(--ds-line-hover); }
+.lab-intent[aria-pressed="true"] { border-color: var(--ds-accent-ink); color: var(--ds-accent-ink); background: color-mix(in srgb, var(--ds-accent) 10%, transparent); }
+.lab-intent:focus-visible, .lab-wallet .ds-btn:focus-visible { outline: 2px solid var(--ds-accent-ink); outline-offset: 2px; }
+.lab-swap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, var(--ds-card-w))); gap: 24px; align-items: start; }
+.lab-swap { display: grid; gap: 10px; min-width: 0; }
+.lab-swap-help { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 4px; font-size: 12.5px; color: var(--ds-fg-dim); }
+.lab-swap-help code { font-size: 11.5px; }
+
 /* /card: the same card in both themes side by side */
 .lab-themes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .lab-theme-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; justify-items: center; align-content: start; min-width: 0; padding: 24px 16px; border-radius: var(--ds-r-sheet); border: 1px solid var(--ds-line-2); background: var(--ds-bg); color: var(--ds-fg); }
@@ -77,6 +106,7 @@ code { font-family: var(--ds-font-mono); font-size: 0.92em; }
   .lab-hero { grid-template-columns: minmax(0, 1fr); }
   .lab-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lab-themes { grid-template-columns: minmax(0, 1fr); }
+  .lab-swap-grid { grid-template-columns: minmax(0, var(--ds-card-w)); }
 }
 @media (max-width: 640px) {
   .lab-header { flex-wrap: wrap; height: auto; padding: 10px 16px 6px; gap: 6px 12px; }

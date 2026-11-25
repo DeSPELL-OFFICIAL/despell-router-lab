@@ -1,0 +1,27 @@
+"use client";
+
+import { useState } from "react";
+import { BASE_SEPOLIA, GIWA_SEPOLIA } from "@/lib/swap/chains";
+import { SwapCard } from "./swap-card";
+
+/** Demo amount decided for DES-697: one Circle faucet drip is 20 USDC. */
+export const DEMO_USDC = 10_000_000n;
+
+export function SwapDemo() {
+  const [picked, setPicked] = useState(false);
+  return (
+    <section aria-label="Swap" style={{ display: "grid", gap: 20 }}>
+      <div className="lab-intents" role="group" aria-label="What to do">
+        <button type="button" className="lab-intent" aria-pressed={picked} onClick={() => setPicked(true)}>
+          Swap 10 USDC to ETH
+        </button>
+      </div>
+      {picked && (
+        <div className="lab-swap-grid">
+          <SwapCard chain={BASE_SEPOLIA} amountIn={DEMO_USDC} onCancel={() => setPicked(false)} />
+          <SwapCard chain={GIWA_SEPOLIA} amountIn={DEMO_USDC} onCancel={() => setPicked(false)} />
+        </div>
+      )}
+    </section>
+  );
+}
