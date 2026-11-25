@@ -22,18 +22,29 @@ The circuit is a second, public copy of the judgment. The server stays the one t
 | `src/circuit.ts` | The same rules written as Boolean equations, built into NAND gates |
 | `src/netlist.ts` | NAND builder, TapeOut byte format, evaluators (one vector, or 32 at a time) |
 | `src/cost.ts` | OKB fees |
-| `scripts/build-circuit.ts` | Builds the netlist, checks it on every input, writes `circuit/pool-judgment.json` |
+| `src/onchain.ts` | Reads a TapeOut processor over JSON-RPC (`eval`, `netlist`, `circuitInfo`, fees) and gives the circuit's judgment for an input (`judgeOnChain`) |
+| `src/samples.ts` | Named and pseudo-random sample vectors with the rule's answers, for checking `eval` after a tape-out |
+| `scripts/build-circuit.ts` | Builds the netlist, checks it on every input, writes `circuit/pool-judgment.json` and `circuit/pool-judgment-samples.json` |
 | `scripts/check-onchain.ts` | Read-only X Layer checks: fees today, and the byte format against circuits already on chain |
+| `scripts/quote-bem.ts` | Fetches and checks a LI.FI quote for the OKB → BEM swap the tape-out needs (a read; nothing is sent) |
+| `scripts/find-processor.ts` | Finds the DeSpell processor a wallet made and records its address outside the repository, so later runs name it |
+| `scripts/check-tapeout.ts` | After the tape-out: reads the circuit back from X Layer and compares `eval` with the rule function on every sample |
+| `contracts/` | Foundry: the TapeOut interfaces, the tape-out script, a unit test, and fork tests against X Layer mainnet |
 
 This folder is one package of the repository's pnpm workspace, so `pnpm install` runs at the repository root and the root lockfile pins its two dev dependencies (TypeScript and Node types). Nothing else is needed: the code runs on Node 24 with its built-in TypeScript support.
 
 ```bash
 pnpm install              # at the repository root
-pnpm test                 # 31 tests, including the 2^27 comparison (about 16 s on 12 threads)
+pnpm test                 # 37 tests, including the 2^27 comparison (about 16 s on 12 threads)
 pnpm typecheck
-pnpm build:circuit        # rebuild circuit/pool-judgment.json
-pnpm check:circuit        # fail if the committed netlist is out of date
+pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
+pnpm check:circuit        # fail if the committed netlist or samples are out of date
 node scripts/check-onchain.ts
+
+cd contracts
+./scripts/install-deps.sh               # forge-std at a pinned commit
+forge test                              # unit tests
+FOUNDRY_PROFILE=fork forge test -vv     # the whole tape-out on a fork of X Layer mainnet (sends nothing)
 ```
 
 ## Input pins
@@ -178,7 +189,30 @@ Fees read from X Layer mainnet on 2026-11-26 on the OrderGuard XL processor (`0x
 
 At 79.03 USD per OKB (2026-11-25), the total is about 1.40 USD.
 
-A processor made today with the TapeOut factory charges differently. On a fork of X Layer mainnet (2026-11-26), making one cost 0.1 BEM (the factory's fee token) and minting 157 NAND at the lowest price cost 0.01000157 BEM; the tape-out fee stayed 0.0013 OKB, and five transactions took about 2.5 million gas. DES-699 tapes the circuit out on a DeSpell processor made that way and records the real figures here.
+A processor made today with the TapeOut factory charges differently. On a fork of X Layer mainnet (2026-11-26), making one cost 0.1 BEM (the factory's fee token) and minting 157 NAND at the lowest price cost 0.01000157 BEM; the tape-out fee stayed 0.0013 OKB. That is the way this circuit is taped out; see [Taping out](#taping-out).
+
+## Taping out
+
+The circuit goes on a DeSpell processor of its own, so the processor address in the submission is ours. `contracts/script/TapeOut.s.sol` does it from one wallet in steps that can each be run again safely:
+
+| Step | `--sig` | Transactions | Pays |
+| --- | --- | --- | --- |
+| Read where things stand | `status()` | none | |
+| Swap OKB for the BEM the next steps need, through a LI.FI quote (`scripts/quote-bem.ts`) | `swapForBem()` | 1 | about 0.0122 OKB |
+| Make the DeSpell processor with the TapeOut factory | `createProcessor()` | 2 (exact BEM approval, `createCPU`) | 0.1 BEM |
+| Buy 157 NAND transistors and tape the circuit out, then check `eval` on 64 sample vectors against the rule function | `tapeOutCircuit()` | 3 (exact BEM approval, `mint`, `tapeout`) | 0.01000157 BEM and 0.0013 OKB |
+
+Before the swap the script checks the quote again: the wallet pays, BEM comes out, at most 0.025 OKB goes in, the LI.FI Diamond is the contract called, and the quote is at most 5 minutes old. It reads who receives and the minimum received from the swap calldata itself (words 3 and 4 of LI.FI's native-in swap functions), not only from the quote's fields: on the fork, a quote whose calldata alone pays another address, or alone lowers the minimum, is refused. `tapeOutCircuit()` finds the processor on chain by its creator, after it exists, so no transaction is aimed at an address that only existed in a simulation. Once `scripts/find-processor.ts` has recorded the address, later runs pass it as `DESPELL_PROCESSOR` and the script checks it is ours instead of searching. A step that is already done is skipped, and every approval is used up (the fork test checks both allowances end at 0).
+
+After the tape-out, `node scripts/check-tapeout.ts --processor <address>` finds the circuit by its netlist, reads it back and asks X Layer's `eval` for each of the 64 samples, one line per sample, and fails on any difference from the rule function. A server asks the chain the same way:
+
+```ts
+import { judgeOnChain, XLayerReader } from "./src/onchain.ts";
+
+const judgment = await judgeOnChain(new XLayerReader(), processor, circuitId, input); // { stage, lane }
+```
+
+On a fork of X Layer mainnet (2026-11-26) the whole run from OKB only went through: the swap bought 0.1240 BEM for 0.0121 OKB, the processor was made, the circuit taped out as circuit 1, and `eval` matched the rule function on all 64 samples. In all it spent about 0.0134 OKB plus gas (the five tape-out transactions were estimated at 2.52 million gas, 0.0001 OKB at 0.04 gwei; the swap is one more), about 1.1 USD.
 
 ## What the circuit leaves out
 

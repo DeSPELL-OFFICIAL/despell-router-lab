@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { ARTIFACT_URL, artifactText } from "../src/artifact.ts";
-import { INPUT_COUNT, OUTPUT_COUNT, PIN } from "../src/bits.ts";
+import { ARTIFACT_URL, artifactText, SAMPLES_URL, samplesText } from "../src/artifact.ts";
+import { INPUT_COUNT, OUTPUT_COUNT, PIN, packPins } from "../src/bits.ts";
 import { buildJudgmentCircuit } from "../src/circuit.ts";
 import { formatOkb, tapeoutCost } from "../src/cost.ts";
 import { compareAll } from "../src/exhaustive-parallel.ts";
-import { decodeNetlist, encodeNetlist, evaluate32, fromHex, scratchFor, toHex } from "../src/netlist.ts";
+import { decodeNetlist, encodeNetlist, evaluate, evaluate32, fromHex, scratchFor, toHex } from "../src/netlist.ts";
 import { CHANGE_KINDS, STAGES } from "../src/rule.ts";
 
 const netlist = buildJudgmentCircuit();
@@ -42,6 +42,17 @@ test("the committed netlist is the one the rules build today", (t) => {
   assert.deepEqual(decodeNetlist(fromHex(artifact.netlist), artifact.nIn, artifact.nOut).gates, netlist.gates);
   const cost = tapeoutCost(artifact.nand);
   t.diagnostic(`${artifact.nand} NAND · fees ${formatOkb(cost.feesWei)} OKB · with protocol fee ${formatOkb(cost.totalWei)} OKB`);
+});
+
+test("the committed samples are the rule's answers and the circuit's outputs", () => {
+  assert.equal(readFileSync(SAMPLES_URL, "utf8"), samplesText(), "run `pnpm build:circuit` in xlayer/");
+  const file = JSON.parse(samplesText()) as { vectors: number[]; inputs: string[]; outputs: number[]; names: string[] };
+  assert.equal(file.vectors.length, 64);
+  assert.ok(new Set(file.outputs).size >= 8, "samples reach many different outputs");
+  file.vectors.forEach((vector, i) => {
+    assert.equal(file.inputs[i], toHex(packPins(vector, INPUT_COUNT)), `packed bytes of sample ${i}`);
+    assert.equal(evaluate(netlist, vector), file.outputs[i], `circuit output of sample ${i} (${file.names[i]})`);
+  });
 });
 
 test("the circuit never opens a pool without an AI full review, approved family and passing probe facts", () => {
