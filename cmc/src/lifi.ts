@@ -139,7 +139,12 @@ function retryWaitMs(res: Response): number {
 }
 
 export function createLifiQuoter(
-  options: { fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {},
+  options: {
+    fetch?: typeof fetch;
+    sleep?: (ms: number) => Promise<void>;
+    /** Optional LI.FI API key for a higher rate limit; sent only as the x-lifi-api-key header. */
+    apiKey?: string;
+  } = {},
 ): RouteQuoter {
   const doFetch = options.fetch ?? fetch;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
@@ -156,7 +161,9 @@ export function createLifiQuoter(
 
     const request = async (): Promise<Response> => {
       try {
-        return await doFetch(url, { headers: { Accept: "application/json" } });
+        const headers: Record<string, string> = { Accept: "application/json" };
+        if (options.apiKey) headers["x-lifi-api-key"] = options.apiKey;
+        return await doFetch(url, { headers });
       } catch (err) {
         throw new QuoteFailedError(`LI.FI request failed: ${err instanceof Error ? err.message : String(err)}`);
       }

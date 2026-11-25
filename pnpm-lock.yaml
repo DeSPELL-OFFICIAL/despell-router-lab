@@ -10,6 +10,9 @@ importers:
 
   app:
     dependencies:
+      '@despell-lab/cmc':
+        specifier: workspace:*
+        version: link:../cmc
       next:
         specifier: 16.4.6
         version: 16.4.6(@babel/core@7.29.13)(@types/node@24.19.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

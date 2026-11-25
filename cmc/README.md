@@ -38,6 +38,22 @@ Rows that cannot be ranked are kept and listed last, with the reason:
 | `quote_incomplete` | gas or a fee without a valid, non-negative USD amount, or a fee that does not say whether it is included; makes the ranking incomplete |
 | `premium_out_of_band` | the route pays more than `maxPremiumPct` away from the stock |
 
+## Buying through DeSpell
+
+The lab app's `/cmc` page shows this ranking with a [Buy] button per wrapper. The button asks DeSpell's public connector (MCP, `prepare_swap`) for a 15-minute link that opens the same trade, 100 USDC into that wrapper on its own chain, as a card in DeSpell. Whoever opens the link connects their own wallet there, sees the quote for that wallet, and signs or not. Nothing in this repository signs or moves funds.
+
+- `src/despell.ts` asks `find_token` whether DeSpell can buy each ranked wrapper, and refuses any `prepare_swap` answer whose chain, token addresses or amount differ from the request, or whose link is not the connector's own site carrying only a handoff id.
+- `src/view.ts` keeps "Receives the most" on the true best. If DeSpell cannot buy that wrapper, its [Buy] is disabled with the reason and the first buyable candidate is marked "Most you can buy on DeSpell". With no best (a quote failed, or everything at the top trades too far below the stock), no row gets a badge and the page says why.
+- The connector defaults to the production app, `https://app.despell.io/api/mcp`: a link signed there buys the real tokenized stock. Set `DESPELL_MCP_URL=https://test.despell.io/api/mcp` for DeSpell's test deployment. The page names which one it uses.
+
+| Variable | Needed | What for |
+| --- | --- | --- |
+| `CMC_PRO_API_KEY` | yes | CoinMarketCap RWA and cryptocurrency info |
+| `LIFI_API_KEY` | no | LI.FI quotes above the keyless limit (a few dozen an hour; one page view uses about 13) |
+| `DESPELL_MCP_URL` | no | DeSpell connector; production app by default |
+
+The page reuses one measurement for 5 minutes, or 1 minute if some quotes failed.
+
 ## Use
 
 `cmc/` is a package of the root pnpm workspace (`@despell-lab/cmc`). Node 24 runs the TypeScript directly; there are no runtime dependencies. TypeScript is a dev dependency, only for type checking. The root `pnpm verify` runs this package's typecheck and tests with the rest.
@@ -79,4 +95,7 @@ Nothing here signs or sends a transaction. Route quotes use a placeholder sender
 | `src/rank.ts` | premium, received value, short split, band, best and ties |
 | `src/compare.ts` | the whole flow in one call |
 | `src/format.ts` | plain-text table |
+| `src/despell.ts` | DeSpell connector: buyability and handoff links |
+| `src/view.ts` | the list screen model: badges, buy states, folded rows |
+| `src/screen.ts` | compare, check buyability, build the screen model |
 | `test/fixtures/` | CMC and LI.FI responses recorded on 2026-11-25, trimmed to the fields read |

@@ -137,3 +137,13 @@ test("a 429 without Retry-After waits the default second before retrying", async
   await createLifiQuoter({ fetch: noHeader, sleep: async (ms) => void waits.push(ms) })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 });
   assert.deepEqual(waits, [1000]);
 });
+
+test("a LI.FI API key, when given, travels only in its header", async () => {
+  const f = fakeFetch({ "/v1/quote": { body: lifiQuoteNvdax() } });
+  await createLifiQuoter({ fetch: f.fetch, apiKey: "lifi-test-key" })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 });
+  assert.equal(f.seen[0]!.headers["x-lifi-api-key"], "lifi-test-key");
+  assert.ok(!f.seen[0]!.url.toString().includes("lifi-test-key"));
+  const none = fakeFetch({ "/v1/quote": { body: lifiQuoteNvdax() } });
+  await createLifiQuoter({ fetch: none.fetch })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 });
+  assert.equal(none.seen[0]!.headers["x-lifi-api-key"], undefined);
+});
