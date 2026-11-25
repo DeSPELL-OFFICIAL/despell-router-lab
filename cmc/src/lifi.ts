@@ -80,10 +80,11 @@ export interface LifiQuoteResponse {
   message?: string;
 }
 
+/** A cost's USD amount, or null when it is missing, not a number, or negative. */
 const usdOf = (c: LifiCost): number | null => {
   if (c.amountUSD == null || c.amountUSD === "") return null;
   const v = Number(c.amountUSD);
-  return Number.isFinite(v) ? v : null;
+  return Number.isFinite(v) && v >= 0 ? v : null;
 };
 
 export function parseLifiQuote(body: LifiQuoteResponse): RouteQuote {
@@ -100,14 +101,14 @@ export function parseLifiQuote(body: LifiQuoteResponse): RouteQuote {
   let gasUsd = 0;
   for (const g of gasCosts) {
     const v = usdOf(g);
-    if (v == null) throw new QuoteIncompleteError("a gas cost has no USD amount");
+    if (v == null) throw new QuoteIncompleteError("a gas cost has no valid USD amount");
     gasUsd += v;
   }
   let feeUsd = 0;
   let extraFeeUsd = 0;
   for (const f of body.estimate?.feeCosts ?? []) {
     const v = usdOf(f);
-    if (v == null) throw new QuoteIncompleteError("a fee has no USD amount");
+    if (v == null) throw new QuoteIncompleteError("a fee has no valid USD amount");
     // LI.FI: `included: true` is already in the quoted amounts; `false` is paid on top of fromAmount.
     if (f.included === true) feeUsd += v;
     else if (f.included === false) extraFeeUsd += v;
@@ -124,8 +125,20 @@ export function parseLifiQuote(body: LifiQuoteResponse): RouteQuote {
   };
 }
 
-export function createLifiQuoter(options: { fetch?: typeof fetch } = {}): RouteQuoter {
+/** Longest wait honoured from a 429's Retry-After before the single retry. */
+const MAX_RETRY_WAIT_MS = 5_000;
+const DEFAULT_RETRY_WAIT_MS = 1_000;
+
+function retryWaitMs(res: Response): number {
+  const header = Number(res.headers.get("retry-after"));
+  return Number.isFinite(header) && header >= 0 ? Math.min(header * 1000, MAX_RETRY_WAIT_MS) : DEFAULT_RETRY_WAIT_MS;
+}
+
+export function createLifiQuoter(
+  options: { fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {},
+): RouteQuoter {
   const doFetch = options.fetch ?? fetch;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   return async ({ chainId, tokenAddress, spendUsd }) => {
     const pay = USDC[chainId];
     if (!pay) throw new UnsupportedChainError(`no USDC configured for chain ${chainId}`);
@@ -137,11 +150,18 @@ export function createLifiQuoter(options: { fetch?: typeof fetch } = {}): RouteQ
     url.searchParams.set("fromAmount", toBaseUnits(spendUsd.toFixed(pay.decimals), pay.decimals));
     url.searchParams.set("fromAddress", QUOTE_ONLY_ADDRESS);
 
-    let res: Response;
-    try {
-      res = await doFetch(url, { headers: { Accept: "application/json" } });
-    } catch (err) {
-      throw new QuoteFailedError(`LI.FI request failed: ${err instanceof Error ? err.message : String(err)}`);
+    const request = async (): Promise<Response> => {
+      try {
+        return await doFetch(url, { headers: { Accept: "application/json" } });
+      } catch (err) {
+        throw new QuoteFailedError(`LI.FI request failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    let res = await request();
+    // Rate limited: wait as asked (capped) and try once more; a second 429 is a failed quote.
+    if (res.status === 429) {
+      await sleep(retryWaitMs(res));
+      res = await request();
     }
     const body = (await res.json().catch(() => ({}))) as LifiQuoteResponse;
     // 404 is LI.FI's QuoteNotFound. Anything else that is not OK (429 rate

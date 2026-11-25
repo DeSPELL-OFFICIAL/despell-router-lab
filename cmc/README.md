@@ -24,7 +24,7 @@ For each wrapper, with `ref` = the reference price of the stock, and a quote tha
 
 `ref` defaults to CMC's `average_tokenized_price` for the asset, because the RWA endpoints do not return the exchange-listed stock price. Pass `referencePriceUsd` to use another one. One token is taken as one share. The wrapper's own CMC price is reported (`cmcPremiumPct`) but not used to rank: it can lag the price you would actually pay.
 
-A route paying more than 3% away from `ref` (`maxPremiumPct`, 2 or 3 is sensible) is not ranked. Paying well below the stock is not a cheaper share: it is a token worth less than one share, a depeg, or a bad quote. For the same reason a row that receives more than it spent is ranked but never marked best. Rows within $0.05 of the best (`tieUsd`) are marked as tied. If any quote failed or came back without its cost fields, `incomplete` counts those rows and no row is marked best.
+A route paying more than 3% away from `ref` (`maxPremiumPct`, 2 or 3 is sensible) is not ranked. Paying well below the stock is not a cheaper share: it is a token worth less than one share, a depeg, or a bad quote. Inside the band, a row paying more than 1% below the stock, or receiving more than it spent, is ranked but never marked best: if its token is not exactly one share, the discount is a loss. Rows within $0.05 of the best (`tieUsd`) are marked as tied. If any quote failed or came back without its cost fields, `incomplete` counts those rows and no row is marked best.
 
 Rows that cannot be ranked are kept and listed last, with the reason:
 
@@ -34,8 +34,8 @@ Rows that cannot be ranked are kept and listed last, with the reason:
 | `non_evm_chain` | Solana, TON: no EVM route quote |
 | `unsupported_chain` | EVM or unrecognised chain with no quote source wired yet |
 | `no_route` | LI.FI answered 404: no route for this pair |
-| `quote_failed` | rate limit, server error or network drop; makes the ranking incomplete |
-| `quote_incomplete` | gas without a USD amount, or a fee that does not say whether it is included; makes the ranking incomplete |
+| `quote_failed` | rate limit (after one retry), server error or network drop; makes the ranking incomplete |
+| `quote_incomplete` | gas or a fee without a valid, non-negative USD amount, or a fee that does not say whether it is included; makes the ranking incomplete |
 | `premium_out_of_band` | the route pays more than `maxPremiumPct` away from the stock |
 
 ## Use

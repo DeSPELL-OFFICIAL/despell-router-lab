@@ -23,6 +23,7 @@ function note(r: RankedWrapper): string {
   if (r.best) return "receives the most";
   if (r.bestBlocked === "receives_more_than_spent") return "not best: receives more than spent";
   if (r.bestBlocked === "ranking_incomplete") return "not best: ranking incomplete";
+  if (r.bestBlocked === "discount_over_1pct") return "not best: pays over 1% below the stock";
   if (r.tiedWithBest) return "tied with best";
   return r.unavailable ?? "";
 }

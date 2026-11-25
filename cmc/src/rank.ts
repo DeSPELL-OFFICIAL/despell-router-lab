@@ -16,8 +16,9 @@
 // Rows are sorted by receivedValueUsd (equivalently, smallest shortfall).
 // A route paying far from the stock price is not a cheaper share: it is a
 // token that is not one share, a depeg, or a bad quote. Those rows are not
-// ranked (maxPremiumPct). A row that receives more than it spent is ranked
-// but never marked best.
+// ranked (maxPremiumPct). Inside the band, a row paying more than 1% below
+// the stock, or receiving more than it spent, is ranked but never marked
+// best: if its token is not exactly one share, the discount is a loss.
 
 import type { RouteQuote } from "./lifi.ts";
 import type { Wrapper } from "./wrappers.ts";
@@ -42,11 +43,15 @@ export type Unavailable =
 const INCOMPLETE_REASONS: ReadonlySet<Unavailable> = new Set(["quote_failed", "quote_incomplete"]);
 
 export const DEFAULT_MAX_PREMIUM_PCT = 3;
+/** A row paying more than this far below the stock can be ranked but not be best. */
+export const BEST_MAX_DISCOUNT_PCT = 1;
 export const DEFAULT_TIE_USD = 0.05;
 
 export type BestBlocked =
   /** Some quotes failed or were incomplete, so no row can be called best. */
   | "ranking_incomplete"
+  /** This route pays more than 1% below the stock; if the token is not exactly one share, that is a loss. */
+  | "discount_over_1pct"
   /** This row receives more than was spent; that is a pricing artefact, not a bargain. */
   | "receives_more_than_spent";
 
@@ -159,6 +164,10 @@ export function rankWrappers(input: RankInput): RankOutput {
     if (ranked[0]) ranked[0].bestBlocked = "ranking_incomplete";
   } else {
     for (const r of ranked) {
+      if (r.premiumPct! < -BEST_MAX_DISCOUNT_PCT) {
+        r.bestBlocked = "discount_over_1pct";
+        continue;
+      }
       if (r.receivedValueUsd! > spendUsd) {
         r.bestBlocked = "receives_more_than_spent";
         continue;

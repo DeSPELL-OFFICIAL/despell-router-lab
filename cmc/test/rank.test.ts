@@ -77,8 +77,29 @@ test("a wrapper trading below the stock cannot win by its discount (review repro
   const wide = rank([wrapper("Discount5", 95), wrapper("Normal", 100)], [quoted(1.05, 0.1), quoted(0.99, 0.1)], { maxPremiumPct: 5 });
   assert.deepEqual(symbols(wide.rows), ["Discount5", "Normal"]);
   assert.equal(wide.rows[0]!.best, false);
-  assert.equal(wide.rows[0]!.bestBlocked, "receives_more_than_spent");
+  assert.equal(wide.rows[0]!.bestBlocked, "discount_over_1pct");
   assert.equal(wide.rows[1]!.best, true);
+});
+
+test("a row paying over 1% below the stock is ranked but not best", () => {
+  // -1.48% at execution: inside the 3% band, outside the 1% best limit.
+  const { rows } = rank([wrapper("Cheap", 100), wrapper("Fair", 100)], [quoted(1.015, 1.6), quoted(0.99, 0.1)]);
+  // Cheap receives $99.90 and Fair $98.90: Cheap stays on top, Fair is best.
+  assert.deepEqual(symbols(rows), ["Cheap", "Fair"]);
+  const [cheap, fair] = rows;
+  assert.equal(cheap!.unavailable, null);
+  assert.ok(cheap!.premiumPct! < -1);
+  assert.equal(cheap!.best, false);
+  assert.equal(cheap!.bestBlocked, "discount_over_1pct");
+  assert.equal(fair!.best, true);
+});
+
+test("a row receiving more than it spent is ranked but not best", () => {
+  // -0.5% at execution, no costs: receives $100.50 for $100.
+  const { rows } = rank([wrapper("Over", 100), wrapper("Fair", 100)], [quoted(1.005, 0), quoted(0.99, 0.1)]);
+  assert.deepEqual(symbols(rows), ["Over", "Fair"]);
+  assert.equal(rows[0]!.bestBlocked, "receives_more_than_spent");
+  assert.equal(rows[1]!.best, true);
 });
 
 test("the premium band defaults to 3% and can be narrowed", () => {

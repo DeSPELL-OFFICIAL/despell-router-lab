@@ -55,7 +55,7 @@ test("404 means no route; other failures mean the quote failed", async () => {
 
   const limited = fakeFetch({ "/v1/quote": { status: 429, body: { message: "Rate limit exceeded" } } });
   await assert.rejects(
-    createLifiQuoter({ fetch: limited.fetch })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 }),
+    createLifiQuoter({ fetch: limited.fetch, sleep: async () => {} })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 }),
     (err: unknown) => err instanceof QuoteFailedError && /429/.test(err.message),
   );
 
@@ -79,4 +79,41 @@ test("missing cost fields make a quote incomplete instead of free", () => {
   assert.throws(() => parseLifiQuote(withFees([{ included: true }])), QuoteIncompleteError);
   // No fees at all is fine.
   assert.equal(parseLifiQuote(withFees([])).feeUsd, 0);
+});
+
+test("a negative USD amount makes a quote incomplete", () => {
+  const body = lifiQuoteNvdax();
+  body.estimate!.gasCosts = [{ amountUSD: "-0.5" }];
+  assert.throws(() => parseLifiQuote(body), QuoteIncompleteError);
+  const fees = lifiQuoteNvdax();
+  fees.estimate!.feeCosts = [{ amountUSD: "-1", included: true }];
+  assert.throws(() => parseLifiQuote(fees), QuoteIncompleteError);
+});
+
+test("a 429 is retried once, after the Retry-After wait (capped)", async () => {
+  let calls = 0;
+  const waits: number[] = [];
+  const sleep = async (ms: number) => {
+    waits.push(ms);
+  };
+  const thenOk = (async () => {
+    calls++;
+    return calls === 1
+      ? new Response(JSON.stringify({ message: "Rate limit exceeded" }), { status: 429, headers: { "retry-after": "2" } })
+      : new Response(JSON.stringify(lifiQuoteNvdax()), { status: 200 });
+  }) as typeof fetch;
+  const q = await createLifiQuoter({ fetch: thenOk, sleep })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 });
+  assert.equal(calls, 2);
+  assert.deepEqual(waits, [2000]);
+  assert.equal(q.tool, "lifiIntentsDex");
+
+  calls = 0;
+  waits.length = 0;
+  const always429 = (async () => {
+    calls++;
+    return new Response("{}", { status: 429, headers: { "retry-after": "600" } });
+  }) as typeof fetch;
+  await assert.rejects(createLifiQuoter({ fetch: always429, sleep })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 }), QuoteFailedError);
+  assert.equal(calls, 2, "only one retry");
+  assert.deepEqual(waits, [5000], "wait is capped");
 });
