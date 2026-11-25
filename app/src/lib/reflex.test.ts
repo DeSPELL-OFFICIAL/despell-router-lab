@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import recorded from "@despell-lab/reactive/reflex-page.json";
 import {
   journalNewestFirst,
+  markedStatus,
   median,
+  oneDecimal,
   parseReflexPage,
   rangeLine,
   readMarksNow,
@@ -27,14 +29,24 @@ describe("the recorded measurement", () => {
     expect(s.medianBlocks).toBe(recorded.latency.medianBlocks);
     expect(s.minSeconds).toBe(recorded.latency.minSeconds);
     expect(s.maxSeconds).toBe(recorded.latency.maxSeconds);
-    expect(s.withinOneSecond / s.n).toBeCloseTo(recorded.latency.shares.withinOneSecond, 10);
-    expect(s.withinTwoSeconds / s.n).toBeCloseTo(recorded.latency.shares.withinTwoSeconds, 10);
+    expect(s.withinFiveBlocks / s.n).toBeCloseTo(recorded.latency.shares.withinFiveBlocks, 10);
   });
 
-  it("measured 14 marks: median 1 s, 1–2 s and 4–10 blocks", () => {
+  it("measured 14 marks: median 1 s (6.5 blocks), 1–2 s and 4–10 blocks, 6 within 5 blocks", () => {
     const s = summarize(reflexPage);
-    expect([s.n, s.medianSeconds, s.medianBlocks, s.withinOneSecond, s.withinTwoSeconds]).toEqual([14, 1, 6.5, 8, 14]);
+    expect([s.n, s.medianSeconds, s.medianBlocks, s.withinFiveBlocks, s.withinTenBlocks]).toEqual([14, 1, 6.5, 6, 14]);
     expect(rangeLine(s)).toBe("1–2 s · 4–10 blocks");
+  });
+
+  it("measures the block time from the runs themselves: about 0.2 s", () => {
+    const s = summarize(reflexPage);
+    expect(s.blockSeconds).toBeGreaterThan(0.19);
+    expect(s.blockSeconds).toBeLessThan(0.21);
+    expect(oneDecimal(s.medianBlocks! * s.blockSeconds)).toBe("1.3");
+  });
+
+  it("marks every run with the reflex table's status for its change", () => {
+    expect(reflexPage.journal.every((j) => markedStatus(j) === 2)).toBe(true);
   });
 
   it("links every marked run's three transactions", () => {
@@ -61,6 +73,21 @@ describe("parseReflexPage", () => {
     const journal = [{ ...base.journal[0], mark: null }];
     expect(() => parseReflexPage({ ...base, journal })).toThrow(/lacks/);
   });
+
+  it("rejects a record with no marked run", () => {
+    const journal = [{ ...base.journal[0], result: "no mark within 180 s", mark: null, seconds: null, blocks: null }];
+    expect(() => parseReflexPage({ ...base, journal })).toThrow(/no marked run/);
+  });
+
+  it("rejects more than one watched pool, since runs carry no pool id", () => {
+    const watchedPools = [...base.watchedPools, { ...base.watchedPools[0], poolId: `0x${"1".repeat(64)}` }];
+    expect(() => parseReflexPage({ ...base, watchedPools })).toThrow(/exactly one/);
+  });
+
+  it("rejects a change and a mark on different chains", () => {
+    const chains = { ...base.chains, destination: { chainId: 1, name: "Ethereum" } };
+    expect(() => parseReflexPage({ ...base, chains })).toThrow(/one chain/);
+  });
 });
 
 describe("helpers", () => {
@@ -68,6 +95,12 @@ describe("helpers", () => {
     expect(median([3, 1, 2])).toBe(2);
     expect(median([4, 1, 2, 3])).toBe(2.5);
     expect(median([])).toBeNull();
+  });
+
+  it("reads a kept or missing run as no new mark", () => {
+    const j = reflexPage.journal[0];
+    expect(markedStatus({ ...j, result: "kept" })).toBeNull();
+    expect(markedStatus({ ...j, result: "no mark within 180 s", mark: null })).toBeNull();
   });
 
   it("orders the journal newest first", () => {
@@ -79,7 +112,9 @@ describe("helpers", () => {
   it("shortens hashes and formats UTC", () => {
     expect(shortHex(`0x${"ab".repeat(32)}`)).toBe("0xababab…abab");
     expect(utc("2026-11-25T18:46:11.285Z")).toBe("2026-11-25 18:46 UTC");
+    expect(utc("2026-11-26T03:46:11+09:00")).toBe("2026-11-25 18:46 UTC");
     expect(utc(null)).toBe("—");
+    expect(utc("not a date")).toBe("—");
   });
 });
 

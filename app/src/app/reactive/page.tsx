@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import {
   journalNewestFirst,
+  markedStatus,
+  oneDecimal,
   rangeLine,
   readMarksNow,
   reflexPage,
@@ -39,7 +41,9 @@ function Tx({ tx: r }: { tx: TxRef | null }) {
 
 function JournalItem({ j, open }: { j: JournalEntry; open: boolean }) {
   const pool = reflexPage.watchedPools[0];
-  const marked = j.result === "marked";
+  const status = markedStatus(j);
+  const marked = status !== null;
+  const kind = j.change?.kind ?? "change";
   return (
     <li>
       <details open={open} className={styles.ev}>
@@ -47,14 +51,10 @@ function JournalItem({ j, open }: { j: JournalEntry; open: boolean }) {
           <span className={styles.evTime}>{utc(j.at)}</span>
           <span className={styles.mono}>{shortHex(pool.poolId)}</span>
           <span className={styles.evWhat}>
-            {marked ? (
-              <>
-                <Status status={0} /> → <Status status={2} />
-              </>
-            ) : (
-              <span className="ds-dim">{j.result}</span>
-            )}
-            <span className={styles.mono}>fee_changed · {j.change?.label}</span>
+            {marked ? <Status status={status} /> : <span className="ds-dim">{j.result === "kept" ? "already marked" : j.result}</span>}
+            <span className={styles.mono}>
+              {kind} · {j.change?.label}
+            </span>
           </span>
           <span className={styles.evTook}>{marked ? `${j.seconds} s · ${j.blocks} blocks` : "—"}</span>
         </summary>
@@ -65,42 +65,58 @@ function JournalItem({ j, open }: { j: JournalEntry; open: boolean }) {
               Hook emits <b>FeeUpdated</b> {j.change?.label}
             </span>
             <span className={styles.ev2}>
-              <Tx tx={j.origin} /> · block {j.origin?.block}
+              <Tx tx={j.origin} /> · block {j.origin?.block ?? "—"}
             </span>
           </li>
-          <li>
-            <span className={styles.who}>Reaction · {reflexPage.chains.reactive.name}</span>
-            <span>
-              PoolReflex <b>react</b>: fee_changed → narrow, callback requested
-            </span>
-            <span className={styles.ev2}>
-              <Tx tx={j.reactive} /> · block {j.reactive?.block}
-              {j.origin ? (
-                <>
-                  {" · "}
-                  <a href={j.origin.reactscan} target="_blank" rel="noreferrer">
-                    trace on Reactscan
-                  </a>
-                </>
-              ) : null}
-            </span>
-          </li>
-          <li>
-            <span className={styles.who}>Mark · {reflexPage.chains.destination.name}</span>
-            <span>
-              PoolGuard <b>mark</b> → narrowed (0.1x), {j.seconds} s after the change
-            </span>
-            <span className={styles.ev2}>
-              <Tx tx={j.mark} /> · block {j.mark?.block}
-            </span>
-          </li>
-          <li>
-            <span className={styles.who}>Anyone reads</span>
-            <span>
-              <b>statusOf</b>({shortHex(pool.poolId)}) returns 2 from block {j.mark?.block}
-            </span>
-            <span className={styles.ev2} />
-          </li>
+          {j.reactive ? (
+            <li>
+              <span className={styles.who}>Reaction · {reflexPage.chains.reactive.name}</span>
+              <span>
+                PoolReflex <b>react</b>: {kind} → callback requested
+              </span>
+              <span className={styles.ev2}>
+                <Tx tx={j.reactive} /> · block {j.reactive.block}
+                {j.origin ? (
+                  <>
+                    {" · "}
+                    <a href={j.origin.reactscan} target="_blank" rel="noreferrer">
+                      trace on Reactscan
+                    </a>
+                  </>
+                ) : null}
+              </span>
+            </li>
+          ) : null}
+          {marked ? (
+            <>
+              <li>
+                <span className={styles.who}>Mark · {reflexPage.chains.destination.name}</span>
+                <span>
+                  PoolGuard <b>mark</b> → {statusLabel(reflexPage, status)}, {j.seconds} s ({j.blocks} blocks) after the change
+                </span>
+                <span className={styles.ev2}>
+                  <Tx tx={j.mark} /> · block {j.mark?.block}
+                </span>
+              </li>
+              <li>
+                <span className={styles.who}>Anyone reads</span>
+                <span>
+                  <b>statusOf</b>({shortHex(pool.poolId)}) returns {status} from block {j.mark?.block}
+                </span>
+                <span className={styles.ev2} />
+              </li>
+            </>
+          ) : (
+            <li>
+              <span className={styles.who}>Mark · {reflexPage.chains.destination.name}</span>
+              <span>
+                {j.result === "kept"
+                  ? "PoolGuard kept its tighter mark (MarkKept); nothing loosened"
+                  : `No mark recorded for this run (${j.result})`}
+              </span>
+              <span className={styles.ev2}>{j.mark ? <Tx tx={j.mark} /> : null}</span>
+            </li>
+          )}
           {j.reopen ? (
             <li>
               <span className={styles.who}>Reopened</span>
@@ -124,7 +140,7 @@ export default async function Page() {
   const live = await readMarksNow(page);
   const marksOn = live ? live.marks.filter((m) => m.status > 0).length : null;
   const journal = journalNewestFirst(page);
-  const last = journal.find((j) => j.result === "marked");
+  const last = journal.find((j) => markedStatus(j) !== null);
   const guard = page.contracts.poolGuard;
 
   return (
@@ -134,8 +150,8 @@ export default async function Page() {
         <h1 className="lab-h1">On-chain reflex</h1>
         <p className="lab-lede">
           When a pool the DeSpell router might use changes a setting, a Reactive contract marks that pool as narrowed on-chain, and
-          anyone can read the mark. The router leaves a marked pool out of quotes. These numbers were measured on testnets, with
-          every transaction linked.
+          anyone can read the mark. The router caps a narrowed pool at 0.1x its usual size, and the quotes in this lab leave a
+          marked pool out. These numbers were measured on testnets, with every transaction linked.
         </p>
         <dl className={styles.meta}>
           <div>
@@ -182,17 +198,19 @@ export default async function Page() {
             <dd>
               {s.medianSeconds} s
               <small>
-                median · n = {s.n} · {rangeLine(s)}
+                median · n = {s.n} · {s.medianBlocks} blocks ≈ {oneDecimal((s.medianBlocks ?? NaN) * s.blockSeconds)} s · range{" "}
+                {rangeLine(s)}
               </small>
             </dd>
           </div>
           <div>
-            <dt>Marked within 1 s</dt>
+            <dt>Marked within 5 blocks</dt>
             <dd>
-              {s.withinOneSecond}
+              {s.withinFiveBlocks}
               <span className={styles.of}> / {s.n}</span>
               <small>
-                within 2 s: {s.withinTwoSeconds} / {s.n} · blocks ≈ 0.2 s
+                5 blocks ≈ {oneDecimal(5 * s.blockSeconds)} s · within 10 blocks (≈ {oneDecimal(10 * s.blockSeconds)} s):{" "}
+                {s.withinTenBlocks} / {s.n}
               </small>
             </dd>
           </div>
@@ -262,9 +280,10 @@ export default async function Page() {
             on {page.chains.reactive.name} ({page.chains.reactive.chainId}).
           </li>
           <li>
-            Change to mark is the time between the fee change&apos;s block and the mark&apos;s block, both on{" "}
-            {page.chains.destination.name}. Block times are whole seconds and blocks come about every 0.2 s, so the block gap is
-            shown too. Lasna blocks are listed for reference only: the two chains do not share a clock.
+            Change to mark is the time between the fee change&apos;s block on {page.chains.origin.name} and the mark&apos;s block
+            on {page.chains.destination.name}, the same chain. Its block timestamps are whole seconds, so the block gap is shown
+            too: over these runs a block came every {s.blockSeconds.toFixed(2)} s. Lasna blocks are listed for reference only:
+            the two chains do not share a clock.
           </li>
           <li>
             Marks only tighten. Flipping the fee back is another change, and it narrows the pool again rather than reopening it.

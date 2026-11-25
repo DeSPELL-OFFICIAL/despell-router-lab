@@ -40,8 +40,12 @@ export function parseReflexPage(raw: unknown): ReflexPage {
   const p = raw as Partial<ReflexPage> | null;
   if (!p || p.schema !== SCHEMA) throw new Error(`reflex page: expected schema ${SCHEMA}`);
   if (!p.measuredAt || !p.chains || !p.contracts || !p.statusLabels) throw new Error("reflex page: missing header fields");
-  if (!Array.isArray(p.watchedPools) || p.watchedPools.length === 0) throw new Error("reflex page: no watched pools");
+  // Journal entries carry no pool id, so the page can only tell runs apart while one pool is watched.
+  if (!Array.isArray(p.watchedPools) || p.watchedPools.length !== 1) throw new Error("reflex page: expects exactly one watched pool");
+  // Time to mark compares two block timestamps, which only means something on one chain.
+  if (p.chains.origin.chainId !== p.chains.destination.chainId) throw new Error("reflex page: origin and mark must be on one chain");
   if (!Array.isArray(p.journal) || p.journal.length === 0) throw new Error("reflex page: no runs");
+  if (!p.journal.some((j) => j.result === "marked")) throw new Error("reflex page: no marked run");
   for (const j of p.journal) {
     if (j.result === "marked" && (!j.origin || !j.mark || j.seconds == null || j.blocks == null)) {
       throw new Error(`reflex page: run ${j.run} is marked but lacks its transactions or timing`);
@@ -69,8 +73,10 @@ export type Summary = {
   maxSeconds: number | null;
   minBlocks: number | null;
   maxBlocks: number | null;
-  withinOneSecond: number;
-  withinTwoSeconds: number;
+  /** Seconds per block over the measured runs (first change to last mark), finer than whole-second timestamps. */
+  blockSeconds: number;
+  withinFiveBlocks: number;
+  withinTenBlocks: number;
 };
 
 /** The headline numbers, from the runs themselves. */
@@ -78,6 +84,11 @@ export function summarize(page: ReflexPage): Summary {
   const marked = page.journal.filter((j) => j.result === "marked");
   const secs = marked.map((j) => j.seconds as number);
   const blocks = marked.map((j) => j.blocks as number);
+  const byRun = [...marked].sort((a, b) => a.run - b.run);
+  const first = byRun[0];
+  const lastRun = byRun[byRun.length - 1];
+  const spanBlocks = (lastRun.mark?.block ?? 0) - (first.origin?.block ?? 0);
+  const spanSeconds = (Date.parse(lastRun.mark?.at ?? "") - Date.parse(first.origin?.at ?? "")) / 1000;
   return {
     runs: page.journal.length,
     n: marked.length,
@@ -87,8 +98,9 @@ export function summarize(page: ReflexPage): Summary {
     maxSeconds: secs.length ? Math.max(...secs) : null,
     minBlocks: blocks.length ? Math.min(...blocks) : null,
     maxBlocks: blocks.length ? Math.max(...blocks) : null,
-    withinOneSecond: secs.filter((s) => s <= 1).length,
-    withinTwoSeconds: secs.filter((s) => s <= 2).length,
+    blockSeconds: spanBlocks > 0 && spanSeconds > 0 ? spanSeconds / spanBlocks : NaN,
+    withinFiveBlocks: blocks.filter((b) => b <= 5).length,
+    withinTenBlocks: blocks.filter((b) => b <= 10).length,
   };
 }
 
@@ -102,10 +114,36 @@ export function shortHex(h: string): string {
   return h.length > 14 ? `${h.slice(0, 8)}…${h.slice(-4)}` : h;
 }
 
-/** "2026-11-25 18:46 UTC" */
+/** "2026-11-25 18:46 UTC", whatever offset the input carries. */
 export function utc(iso: string | null): string {
   if (!iso) return "—";
-  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "—";
+  const z = new Date(t).toISOString();
+  return `${z.slice(0, 10)} ${z.slice(11, 16)} UTC`;
+}
+
+/** "1.3", one decimal: block counts turned into seconds. */
+export function oneDecimal(x: number): string {
+  return Number.isFinite(x) ? x.toFixed(1) : "—";
+}
+
+/** The router's reflex table, as PoolReflex.reflexFor has it: the status a change kind is marked with. */
+export const REFLEX_STATUS: Readonly<Record<string, number>> = {
+  code_changed: 3,
+  token_code_changed: 3,
+  implementation_changed: 3,
+  sell_reverted: 3,
+  owner_changed: 2,
+  fee_changed: 2,
+  reserve_below_band: 2,
+  round_trip_loss_up: 2,
+};
+
+/** The status a marked run set: the reflex table's entry for its change kind. */
+export function markedStatus(j: JournalEntry): number | null {
+  if (j.result !== "marked" || !j.change) return null;
+  return REFLEX_STATUS[j.change.kind] ?? null;
 }
 
 export function statusLabel(page: ReflexPage, status: number): string {
@@ -133,8 +171,9 @@ export async function readMarksNow(
   now: () => Date = () => new Date(),
 ): Promise<LiveRead> {
   try {
-    const marks: LiveMark[] = [];
-    for (const pool of page.watchedPools) {
+    // One overall deadline for every pool, read side by side.
+    const signal = AbortSignal.timeout(5_000);
+    const read = async (pool: ReflexPage["watchedPools"][number]): Promise<LiveMark | null> => {
       const res = await fetchImpl(BASE_SEPOLIA_RPC, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -144,14 +183,16 @@ export async function readMarksNow(
           method: "eth_call",
           params: [{ to: page.contracts.poolGuard.address, data: STATUS_OF + pool.poolId.slice(2) }, "latest"],
         }),
-        signal: AbortSignal.timeout(5_000),
+        signal,
       });
       const body = (await res.json()) as { result?: string; error?: unknown };
       if (typeof body.result !== "string" || !/^0x[0-9a-fA-F]+$/.test(body.result)) return null;
       const status = Number(BigInt(body.result));
-      marks.push({ poolId: pool.poolId, status, label: statusLabel(page, status) });
-    }
-    return { marks, readAt: now().toISOString() };
+      return { poolId: pool.poolId, status, label: statusLabel(page, status) };
+    };
+    const marks = await Promise.all(page.watchedPools.map(read));
+    if (marks.some((m) => m === null)) return null;
+    return { marks: marks as LiveMark[], readAt: now().toISOString() };
   } catch {
     return null;
   }
