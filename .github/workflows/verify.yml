@@ -66,3 +66,24 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+
+      # Contract folders. Foundry is pinned; each folder adds its own steps below.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Cache reactive dependencies
+        uses: actions/cache@v4
+        with:
+          path: reactive/lib
+          key: reactive-lib-${{ hashFiles('reactive/scripts/install-deps.sh') }}
+      - name: reactive · dependencies (pinned in install-deps.sh)
+        run: reactive/scripts/install-deps.sh
+      - name: reactive · forge fmt
+        working-directory: reactive
+        run: forge fmt --check src script test test-fork
+      # Unit tests only. The fork tests (FOUNDRY_PROFILE=fork) need a live Base Sepolia RPC.
+      - name: reactive · forge test
+        working-directory: reactive
+        run: forge test

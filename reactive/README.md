@@ -32,7 +32,9 @@ event FeeUpdated(PoolId indexed poolId, uint24 oldFee, uint24 newFee); // fees i
 - `topic1` = the pool id. Emitted by the hook address above.
 - One event per change. The Uniswap v4 PoolManager emits nothing when a dynamic fee changes, and other hooks announce
   fee changes in their own ways, so this hook gives the change a single, known shape.
-- The first one for a pool (`0 → 500`) comes in the same transaction as the PoolManager's `Initialize`.
+- The first one for a pool (`0 → 500`) comes in the same transaction as the PoolManager's `Initialize`. For this pool
+  that is block 63531662. A subscriber treats it as the baseline, not as a change: the Reactive contract (DES-698)
+  subscribes after it.
 
 ### Transactions
 
@@ -82,6 +84,10 @@ after someone has bought ETH from it. The pool is small: quotes are good up to a
     current fee again reverts (`FeeUnchanged`), so every event is a real change.
   - `feeOf(poolId)` — the LP fee the PoolManager charges now.
   - It never holds, takes or moves tokens.
+  - The owner is immutable and is the lab's shared test wallet, so this hook is for testnets only.
+  - The constructor accepts an `initialFee` of 0, which would make the first event read `0 → 0`. The deployed hook
+    uses 500 and its source stays as deployed, so the bytecode can be rebuilt from this repository. If it is ever
+    redeployed, make the constructor reject 0.
 
 ## Build and test
 

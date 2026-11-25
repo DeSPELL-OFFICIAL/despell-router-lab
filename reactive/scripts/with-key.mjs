@@ -7,6 +7,10 @@
 // process, and handed to the child as PRIVATE_KEY. The forge scripts read it with vm.envUint.
 // Every line the child prints is scrubbed of the key (hex and decimal forms) before it is shown,
 // so a verbose trace cannot leak it. The key is never written to disk or passed as an argument.
+//
+// What it cannot hide: the key printed in a form it does not look for (for example hex with its
+// leading zeros dropped), and every other value in the env file, which node loads and the child
+// inherits untouched. Use an env file that holds only the key.
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
