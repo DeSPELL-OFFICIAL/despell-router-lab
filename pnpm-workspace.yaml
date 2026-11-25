@@ -1,0 +1,15 @@
+# One package per folder that needs one. A folder joins the workspace as soon as
+# it has a package.json, either at its top (reactive/package.json) or one level
+# down (reactive/web/package.json). Vendored Foundry libraries never join.
+packages:
+  - app
+  - reactive
+  - reactive/*
+  - xlayer
+  - xlayer/*
+  - cmc
+  - cmc/*
+  - ethglobal
+  - ethglobal/*
+  - "!**/lib/**"
+  - "!**/node_modules/**"
