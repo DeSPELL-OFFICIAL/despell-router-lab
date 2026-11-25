@@ -10,9 +10,15 @@ importers:
 
   app:
     dependencies:
+      '@despell-lab/cmc':
+        specifier: workspace:*
+        version: link:../cmc
       '@despell-lab/reactive':
         specifier: workspace:*
         version: link:../reactive
+      '@despell-lab/xlayer':
+        specifier: workspace:*
+        version: link:../xlayer
       '@tanstack/react-query':
         specifier: 5.107.1
         version: 5.107.1(@types/react@19.3.3)(react@19.3.1)

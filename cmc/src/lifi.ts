@@ -65,7 +65,7 @@ export class QuoteIncompleteError extends Error {
 }
 
 interface LifiCost {
-  amountUSD?: string;
+  amountUSD?: string | number;
   included?: boolean;
 }
 
@@ -82,8 +82,11 @@ export interface LifiQuoteResponse {
 
 /** A cost's USD amount, or null when it is missing, not a number, or negative. */
 const usdOf = (c: LifiCost): number | null => {
-  if (c.amountUSD == null || c.amountUSD === "") return null;
-  const v = Number(c.amountUSD);
+  if (typeof c.amountUSD === "number") return Number.isFinite(c.amountUSD) && c.amountUSD >= 0 ? c.amountUSD : null;
+  // Number(" ") is 0, so blank strings must be caught before converting.
+  const raw = c.amountUSD?.trim();
+  if (!raw) return null;
+  const v = Number(raw);
   return Number.isFinite(v) && v >= 0 ? v : null;
 };
 
@@ -130,12 +133,21 @@ const MAX_RETRY_WAIT_MS = 5_000;
 const DEFAULT_RETRY_WAIT_MS = 1_000;
 
 function retryWaitMs(res: Response): number {
-  const header = Number(res.headers.get("retry-after"));
-  return Number.isFinite(header) && header >= 0 ? Math.min(header * 1000, MAX_RETRY_WAIT_MS) : DEFAULT_RETRY_WAIT_MS;
+  // A missing or blank header would read as Number(null) = 0 and retry at once.
+  const raw = res.headers.get("retry-after")?.trim();
+  const seconds = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(seconds * 1000, MAX_RETRY_WAIT_MS) : DEFAULT_RETRY_WAIT_MS;
 }
 
 export function createLifiQuoter(
-  options: { fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {},
+  options: {
+    fetch?: typeof fetch;
+    sleep?: (ms: number) => Promise<void>;
+    /** Optional LI.FI API key for a higher rate limit; sent only as the x-lifi-api-key header. */
+    apiKey?: string;
+    /** Per-request timeout. Default 15 s. */
+    timeoutMs?: number;
+  } = {},
 ): RouteQuoter {
   const doFetch = options.fetch ?? fetch;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
@@ -152,7 +164,9 @@ export function createLifiQuoter(
 
     const request = async (): Promise<Response> => {
       try {
-        return await doFetch(url, { headers: { Accept: "application/json" } });
+        const headers: Record<string, string> = { Accept: "application/json" };
+        if (options.apiKey) headers["x-lifi-api-key"] = options.apiKey;
+        return await doFetch(url, { headers, signal: AbortSignal.timeout(options.timeoutMs ?? 15_000) });
       } catch (err) {
         throw new QuoteFailedError(`LI.FI request failed: ${err instanceof Error ? err.message : String(err)}`);
       }
