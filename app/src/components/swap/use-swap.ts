@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { isAddressEqual, type PublicClient } from "viem";
 import { useConnection, usePublicClient, useSendTransaction, useSwitchChain } from "wagmi";
 import { useWalletPicker } from "@/components/wallet/providers";
@@ -10,6 +10,7 @@ import { txUrl, type SwapChain } from "@/lib/swap/chains";
 import { fmtEth } from "@/lib/swap/format";
 import { buildPlan, type SwapPlan } from "@/lib/swap/plan";
 import { readQuote, readWallet, receivedFromReceipt, simulatePlan, type Simulation } from "@/lib/swap/read";
+import { runSigning } from "@/lib/swap/sign-loop";
 import type { CardState, Hold, Phase } from "@/lib/swap/view";
 
 /*
@@ -21,7 +22,8 @@ import type { CardState, Hold, Phase } from "@/lib/swap/view";
   starts, that pair is frozen: the card keeps showing exactly what is being
   signed, and before every transaction the remaining transactions are
   simulated again on the latest block. If that simulation fails or would
-  receive less than the signed minimum, signing stops.
+  receive less than the signed minimum, a contest hold arrives, or the card
+  goes away (closed, page left), signing stops before the next transaction.
 */
 
 const REFRESH_MS = 20_000;
@@ -54,6 +56,18 @@ export function useSwap(chain: SwapChain, amountIn: bigint, hold?: Hold | null) 
   const [notice, setNotice] = useState<string | null>(null);
   const inFlight = useRef(false);
   const busy = frozen !== null;
+  // Read by the signing loop between transactions: it must see a hold or an unmount that happens mid-way.
+  const alive = useRef(true);
+  const holdRef = useRef<Hold | null>(hold ?? null);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    holdRef.current = hold ?? null;
+  }, [hold]);
 
   const quoteQ = useQuery({
     queryKey: ["swap-quote", chain.id, amountIn.toString()],
@@ -85,6 +99,8 @@ export function useSwap(chain: SwapChain, amountIn: bigint, hold?: Hold | null) 
     },
     enabled: Boolean(client && quote && wallet && account && isAddressEqual(wallet.account, account)) && !busy,
     refetchInterval: busy ? false : REFRESH_MS,
+    // Keep the last plan and its simulation on screen while the next pair is built; the button stays off meanwhile.
+    placeholderData: keepPreviousData,
   });
 
   // A stop found right before signing holds until a fresh plan has been simulated after it.
@@ -98,6 +114,8 @@ export function useSwap(chain: SwapChain, amountIn: bigint, hold?: Hold | null) 
     amountIn,
     quote: frozen?.plan.quote ?? quote,
     quoteError: quoteQ.error ? firstLine(quoteQ.error) : null,
+    prepError: walletQ.error && !wallet ? `could not read the wallet: ${firstLine(walletQ.error)}` : prepQ.error && !prepQ.data ? firstLine(prepQ.error) : null,
+    stale: !frozen && prepQ.isPlaceholderData,
     account,
     balances: wallet && account && isAddressEqual(wallet.account, account) ? { usdc: wallet.usdcBalance, eth: wallet.ethBalance } : null,
     plan: current?.plan ?? null,
@@ -108,58 +126,50 @@ export function useSwap(chain: SwapChain, amountIn: bigint, hold?: Hold | null) 
 
   async function sign() {
     const prepared = prepQ.data;
-    if (inFlight.current || !client || !prepared || !account) return;
+    if (inFlight.current || !client || !prepared || prepQ.isPlaceholderData || !account) return;
     const { plan, simulation } = prepared;
-    if (!simulation.ok || simulation.planId !== plan.id || !isAddressEqual(plan.account, account) || connection.chainId !== chain.id || hold) return;
+    if (!simulation.ok || simulation.planId !== plan.id || !isAddressEqual(plan.account, account) || connection.chainId !== chain.id || holdRef.current) return;
     inFlight.current = true;
     setNotice(null);
     setFrozen({ plan, simulation });
-    let step = 0;
-    // Block of the last confirmed transaction of this plan: the next simulation must see it.
-    let minBlock: bigint | undefined;
-    const stop = (reason: string) => {
-      setPhase({ kind: "blocked", reason, at: Date.now() });
-      setFrozen(null);
-      const done = step > 0 ? ` ${step} approval${step > 1 ? "s" : ""} went through;` : "";
-      setNotice(`Stopped before signing:${done} ${reason}. Nothing else was sent.`);
-    };
-    try {
-      for (; step < plan.steps.length; step++) {
-        setPhase({ kind: "signing", step, total: plan.steps.length, waiting: "simulating" });
-        if (Date.now() / 1000 > plan.deadline - 60) return stop("the quote is about to expire");
-        let again = await simulatePlan(client, chain, plan, step, minBlock);
-        // Right after a confirmation, a load-balanced RPC node can still be a block behind: try again briefly.
-        for (let retry = 0; !again.ok && minBlock !== undefined && retry < 3; retry++) {
-          await new Promise((r) => setTimeout(r, 1500));
-          again = await simulatePlan(client, chain, plan, step, minBlock);
-        }
-        if (!again.ok) return stop(again.reason);
-        setPhase({ kind: "signing", step, total: plan.steps.length, waiting: "wallet" });
-        const tx = plan.steps[step].tx;
-        const hash = await send.mutateAsync({ account: plan.account, chainId: chain.id, to: tx.to, data: tx.data, value: tx.value });
-        setPhase({ kind: "signing", step, total: plan.steps.length, waiting: "chain" });
-        const receipt = await client.waitForTransactionReceipt({ hash });
-        minBlock = receipt.blockNumber;
-        if (receipt.status !== "success") {
-          setPhase({ kind: "failed", hash, reason: `transaction ${step + 1} of ${plan.steps.length} reverted on chain` });
-          return;
-        }
-        if (plan.steps[step].kind === "swap") {
-          setPhase({ kind: "done", hash, received: receivedFromReceipt(chain, receipt), block: receipt.blockNumber });
-        }
-      }
-    } catch (error) {
-      setFrozen(null);
-      setPhase({ kind: "idle" });
-      if (isUserRejection(error)) {
-        setNotice(step === 0 ? "Declined in your wallet. Nothing was sent." : `Declined in your wallet. ${step} approval${step > 1 ? "s" : ""} went through; the swap was not sent.`);
-      } else {
-        const done = step > 0 ? ` ${step} approval${step > 1 ? "s" : ""} went through, then:` : "";
-        setNotice(`Not sent.${done} ${firstLine(error)}`);
-      }
-    } finally {
-      inFlight.current = false;
-      void queryClient.invalidateQueries({ queryKey: walletKey });
+    const approvals = (n: number) => (n > 0 ? ` ${n} approval${n > 1 ? "s" : ""} went through;` : "");
+    const result = await runSigning(plan, {
+      simulate: (from, minBlock) => simulatePlan(client, chain, plan, from, minBlock),
+      send: (tx) => send.mutateAsync({ account: plan.account, chainId: chain.id, to: tx.to, data: tx.data, value: tx.value }),
+      wait: (hash) => client.waitForTransactionReceipt({ hash }),
+      stopReason: () => (!alive.current ? "the card was closed" : holdRef.current ? `held: ${holdRef.current.title}` : null),
+      onPhase: (p) => {
+        if (alive.current) setPhase(p);
+      },
+      nowMs: () => Date.now(),
+      sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    });
+    inFlight.current = false;
+    void queryClient.invalidateQueries({ queryKey: walletKey });
+    if (!alive.current) return;
+    switch (result.kind) {
+      case "done":
+        setPhase({ kind: "done", hash: result.hash, received: receivedFromReceipt(chain, result.receipt), block: result.receipt.blockNumber });
+        return;
+      case "reverted":
+        setPhase({ kind: "failed", hash: result.hash, reason: `transaction ${result.step + 1} of ${plan.steps.length} reverted on chain` });
+        return;
+      case "stopped":
+        setFrozen(null);
+        setPhase({ kind: "blocked", reason: result.reason, at: Date.now() });
+        setNotice(`Stopped before signing:${approvals(result.step)} ${result.reason}. Nothing else was sent.`);
+        return;
+      case "error":
+        setFrozen(null);
+        setPhase({ kind: "idle" });
+        setNotice(
+          isUserRejection(result.error)
+            ? result.step === 0
+              ? "Declined in your wallet. Nothing was sent."
+              : `Declined in your wallet.${approvals(result.step)} the swap was not sent.`
+            : `Not sent.${approvals(result.step)} ${firstLine(result.error)}`,
+        );
+        return;
     }
   }
 
@@ -192,5 +202,5 @@ export function useSwap(chain: SwapChain, amountIn: bigint, hold?: Hold | null) 
 
   const failedNotice = effectivePhase.kind === "failed" && effectivePhase.hash ? effectivePhase.hash : null;
 
-  return { state, sign, reset, prerequisite, outcome, notice, failedTx: failedNotice ? txUrl(chain, failedNotice) : null, account, connectedChainId: connection.chainId };
+  return { state, sign, reset, busy, prerequisite, outcome, notice, failedTx: failedNotice ? txUrl(chain, failedNotice) : null };
 }

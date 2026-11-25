@@ -97,6 +97,7 @@ function decodeV3Swap(chain: Extract<SwapChain, { dex: "uniswap-v3" }>, step: St
 }
 
 export function decodeStep(chain: SwapChain, step: Step): DecodedStep {
+  if (step.tx.value !== 0n) fail(`step sends ${step.tx.value} wei of ETH`);
   switch (step.kind) {
     case "approve": {
       const call = decodeFunctionData({ abi: erc20Abi, data: step.tx.data });
@@ -114,6 +115,7 @@ export function decodeStep(chain: SwapChain, step: Step): DecodedStep {
       return { kind: "permit2-approve", to: step.tx.to, token: getAddress(token), spender: getAddress(spender), amount, expiration, value: step.tx.value };
     }
     case "swap":
+      same(step.tx.to, chain.dex === "uniswap-v4" ? chain.universalRouter : chain.swapRouter02, "swap router");
       return chain.dex === "uniswap-v4" ? decodeV4Swap(chain, step) : decodeV3Swap(chain, step);
   }
 }

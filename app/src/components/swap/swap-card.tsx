@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { SignCard } from "@/components/sign-card/sign-card";
 import type { SwapChain } from "@/lib/swap/chains";
 import { cardView, type Hold } from "@/lib/swap/view";
@@ -15,12 +15,19 @@ export type SwapCardProps = {
   extraRows?: ReactNode;
   /** A contest's reason to stop signing; turns the check box to stop and the sign button off. */
   hold?: Hold | null;
+  /** Cancel closes the card. Leave it out while another card is signing. */
   onCancel?: () => void;
+  /** Told when this card starts and stops signing, so the page can keep other controls still. */
+  onBusyChange?: (busy: boolean) => void;
 };
 
 /** A live USDC -> ETH signing card on one test network. */
-export function SwapCard({ chain, amountIn, extraRows, hold, onCancel }: SwapCardProps) {
+export function SwapCard({ chain, amountIn, extraRows, hold, onCancel, onBusyChange }: SwapCardProps) {
   const swap = useSwap(chain, amountIn, hold);
+  useEffect(() => {
+    onBusyChange?.(swap.busy && swap.state.phase.kind === "signing");
+  }, [swap.busy, swap.state.phase.kind, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const view = cardView(swap.state);
   const phase = swap.state.phase.kind;
   const stuck = phase === "failed";

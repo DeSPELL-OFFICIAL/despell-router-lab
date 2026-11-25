@@ -58,7 +58,11 @@ export function TestUsdcHelp({ chain, amountIn, usdc }: { chain: SwapChain; amou
         data: encodeFunctionData({ abi: mockMintAbi, functionName: "mint", args: [account, amountIn] }),
         value: 0n,
       });
-      await client.waitForTransactionReceipt({ hash });
+      const receipt = await client.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") {
+        setError(`The mint reverted on chain: ${txUrl(chain, hash)}`);
+        return;
+      }
       setMinted(hash);
       await queryClient.invalidateQueries({ queryKey: ["swap-wallet", chain.id, account] });
     } catch (e) {

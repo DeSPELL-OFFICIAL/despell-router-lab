@@ -30,6 +30,10 @@ export type CardState = {
   amountIn: bigint;
   quote: Quote | null;
   quoteError: string | null;
+  /** Reading the wallet or building the plan failed (and there is nothing earlier to show). */
+  prepError?: string | null;
+  /** The plan on screen is the previous one while the next is being built and simulated. */
+  stale?: boolean;
   account: Address | null;
   balances: { usdc: bigint; eth: bigint } | null;
   plan: SwapPlan | null;
@@ -82,6 +86,7 @@ export function describeStep(chain: SwapChain, step: DecodedStep, account: Addre
   }
 }
 
+/** The simulation of the plan on screen. The sign gate additionally treats a stale plan as pending. */
 function simulationState(state: CardState): SignGate["simulation"] {
   if (!state.plan) return "none";
   if (state.phase.kind === "blocked") return "failed";
@@ -99,6 +104,7 @@ function check(state: CardState, decoded: DecodedPlan | null, decodeError: strin
   if (quoteError && !quote) return { tone: "stop", title: "No quote", items: `· ${quoteError}` };
   if (!quote) return { tone: "plain", title: "Getting a quote…" };
   if (!account) return { tone: "plain", title: "Connect a wallet to simulate this swap", items: "· nothing is sent until you sign" };
+  if (state.prepError && !plan) return { tone: "stop", title: "Could not prepare the transactions", items: `· ${state.prepError}` };
   if (balances && balances.usdc < state.amountIn) {
     return { tone: "stop", title: `Not enough ${chain.usdc.label}`, items: `· you have ${fmtUsdc(balances.usdc)}, the swap needs ${fmtUsdc(state.amountIn)}` };
   }
@@ -198,7 +204,7 @@ export function cardView(state: CardState): CardView {
     cost: { total: simOk ? `${fmtEth(simOk.gas * simOk.gasPrice)} ETH gas` : "—", items },
     check: check(state, decoded, decodeError, sim),
     signLabel,
-    simulation: sim,
+    simulation: sim === "passed" && state.stale ? "pending" : sim,
     busy: phase.kind === "signing",
     decoded,
   };

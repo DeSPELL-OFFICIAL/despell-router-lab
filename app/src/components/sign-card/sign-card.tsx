@@ -250,15 +250,10 @@ function Decision({ props }: { props: SignCardProps }) {
           data-action="sign"
           disabled={!enabled}
           aria-busy={sign?.busy || undefined}
-          // Read the gate again at click time: a stale render must not sign. No handler at all
+          // The handler that runs must re-check the latest state itself (useSwap's sign() does: plan,
+          // simulation, chain, hold, in-flight) and simulate again before sending. No handler at all
           // without a gate, so the card still renders from a Server Component.
-          onClick={
-            sign
-              ? () => {
-                  if (canSign(props)) sign.onSign();
-                }
-              : undefined
-          }
+          onClick={sign && enabled ? sign.onSign : undefined}
         >
           {signLabel}
         </button>

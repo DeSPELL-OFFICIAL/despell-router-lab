@@ -204,6 +204,31 @@ describe.each([
     expect(v.check.tone).toBe("stop");
     expect(v.sends?.amount).toBe("−10");
   });
+
+  it("refuses a swap sent to another contract or carrying ETH, even with a passing simulation", () => {
+    const swapStep = plan.steps[plan.steps.length - 1];
+    const other = getAddress("0x3333333333333333333333333333333333333333");
+    for (const tx of [{ ...swapStep.tx, to: other }, { ...swapStep.tx, value: 10n ** 15n }]) {
+      const tampered: SwapPlan = { ...plan, steps: [...plan.steps.slice(0, -1), { ...swapStep, tx }] };
+      const v = cardView(stateFor(chain, tampered));
+      expect(v.check.tone).toBe("stop");
+      expect(canSign({ ...v, sign: { simulation: v.simulation, onSign: () => {} } })).toBe(false);
+    }
+  });
+
+  it("keeps the previous plan on screen while the next is simulated, with the button off", () => {
+    const v = cardView({ ...stateFor(chain, plan), stale: true });
+    expect(v.check.tone).toBe("ok");
+    expect(v.receives?.note).toBe(`min ${fmtEth(signed.minOut)}`);
+    expect(v.simulation).toBe("pending");
+    expect(canSign({ ...v, sign: { simulation: v.simulation, onSign: () => {} } })).toBe(false);
+  });
+
+  it("says why when the plan cannot be prepared", () => {
+    const v = cardView({ ...stateFor(chain, plan), plan: null, simulation: null, prepError: "could not read the wallet: HTTP 429" });
+    expect(v.check).toMatchObject({ tone: "stop", title: "Could not prepare the transactions" });
+    expect(v.check.items).toContain("HTTP 429");
+  });
 });
 
 describe("buildPlan", () => {
