@@ -20,34 +20,46 @@ const ALLOW = "secret-scan: allow";
 /*
   64 hex digits is either a private key or a public 32-byte value (a tx hash,
   pool id, salt, topic). A line is flagged when it, or the line just above a
-  bare value, speaks of a key, wallet, account, signer, seed or secret. Names
-  of public 32-byte values (POOL_KEY_HASH, txHash, poolId...) are blanked out
-  first so they don't count as "key".
+  bare value, speaks of a key, wallet, account, signer, mnemonic or seed
+  phrase. Two kinds of public value are set aside first:
+  - names that END in a public word (POOL_KEY_HASH, txHash, poolId, salt), so
+    ROOT_KEY or rootSignerKey still count as keys;
+  - explorer links (.../tx/0x...).
 */
 const HEX64 = /(?<![0-9a-fA-F])(0x)?[0-9a-fA-F]{64}(?![0-9a-fA-F])/;
 const BARE_HEX64 = /^\s*["'`]?(0x)?[0-9a-fA-F]{64}["'`]?\s*[,;)]?\s*$/;
-const PUBLIC32_NAME = /[A-Za-z0-9_]*(hash|keccak|txid|tx_?id|pool_?id|salt|root|topic|selector|digest|commit|block)[A-Za-z0-9_]*/gi;
-const KEYISH = /(key|secret|mnemonic|seed|signer|wallet|account|\bpk\b|fromPrivate|privateKeyTo)/i;
-const keyish = (line) => KEYISH.test(line.replace(PUBLIC32_NAME, " "));
+const PUBLIC_SUFFIX = String.raw`(?:hash|id|salt|root|topic|selector|digest)`;
+const PUBLIC_NAME = new RegExp(String.raw`\b[A-Za-z0-9_]*${PUBLIC_SUFFIX}\b`, "gi");
+const ENDS_PUBLIC = new RegExp(String.raw`${PUBLIC_SUFFIX}$`, "i");
+const TX_LINK = /\/tx\/(0x)?[0-9a-fA-F]{64}/g;
+const KEYISH = /(key|secret|mnemonic|seed[ _-]?phrase|signer|wallet|account|(?<![A-Za-z0-9])pk(?![A-Za-z0-9])|fromPrivate|privateKeyTo)/i;
+const keyish = (line) => KEYISH.test(line.replace(PUBLIC_NAME, " "));
+const hexKey = (line, prev) => {
+  const l = line.replace(TX_LINK, "/tx/");
+  return HEX64.test(l) && (keyish(l) || (BARE_HEX64.test(l) && keyish(prev)));
+};
 
 /*
   A value assigned to a secret-sounding name, quoted or not: JS/TS, YAML,
   shell (export X=...), HTTP headers (X-CMC_PRO_API_KEY: ...), query strings
-  and Bearer tokens. Addresses (0x + 40 hex) are public and never count;
-  64-hex values are left to the rule above. A value must look random enough:
-  20+ characters with both letters and digits, and not an env lookup.
+  and Bearer tokens. A value must look random: 20+ characters with letters and
+  digits, or 64 hex digits. Never counted: addresses (0x + 40 hex), URLs (the
+  RPC and database rules cover those), env lookups and placeholders, and names
+  that end in a public word.
 */
-const SECRET_NAME = String.raw`[A-Za-z0-9_-]*(?:[A-Za-z][_-]?key|secret|token|password|passwd)[A-Za-z0-9_-]*`;
-const ASSIGNED = new RegExp(String.raw`(?:^|[^A-Za-z0-9_-])${SECRET_NAME}["']?\s*(?::|=>|=)\s*["'\`]?([^\s"'\`,;()]+)`, "gi");
+const SECRET_NAME = String.raw`[A-Za-z0-9_-]*(?:[A-Za-z][_-]?key|secret|token|password|passwd|bearer|auth(?!or))[A-Za-z0-9_-]*`;
+const ASSIGNED = new RegExp(String.raw`(?:^|[^A-Za-z0-9_-])(${SECRET_NAME})["']?\s*(?::|=>|=)\s*["'\`]?([^\s"'\`,;()]+)`, "gi");
 const QUERY = /[?&](?:key|api_?key|apikey|token|access_token|auth)=([^&\s"'`#]+)/gi;
 const BEARER = /\bBearer\s+([A-Za-z0-9_\-.=+/]+)/g;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-const LOOKUP = /^(\$|process\.env|import\.meta|env\.|<|\{\{|your|xxx|changeme|example|placeholder)/i;
+const LOOKUP = /^(\$|process\.env|import\.meta|env\.|<|\{\{|https?:|your|xxx|changeme|example|placeholder)/i;
 
 export function looksSecret(value) {
-  if (value.length < 20 || ADDRESS.test(value) || /^(0x)?[0-9a-fA-F]{64}$/.test(value) || LOOKUP.test(value)) return false;
-  return /[A-Za-z]/.test(value) && /\d/.test(value);
+  if (ADDRESS.test(value) || LOOKUP.test(value)) return false;
+  if (/^(0x)?[0-9a-fA-F]{64}$/.test(value)) return true;
+  return value.length >= 20 && /[A-Za-z]/.test(value) && /\d/.test(value);
 }
+const assigned = (line) => [...line.matchAll(ASSIGNED)].some((m) => !ENDS_PUBLIC.test(m[1]) && looksSecret(m[2]));
 const anyMatch = (re, line) => [...line.matchAll(re)].some((m) => looksSecret(m[1]));
 
 /* A quoted run of 12, 15, 18, 21 or 24 BIP-39-shaped words (3 to 8 lowercase letters). */
@@ -59,7 +71,7 @@ const seedPhrase = (line) => {
 
 const RULES = [
   { name: "private key block", test: (l) => /-----BEGIN ([A-Z]+ )?PRIVATE KEY-----/.test(l) },
-  { name: "hex private key", test: (l, prev) => HEX64.test(l) && (keyish(l) || (BARE_HEX64.test(l) && keyish(prev))) },
+  { name: "hex private key", test: (l, prev) => hexKey(l, prev) },
   { name: "seed phrase", test: (l) => seedPhrase(l) },
   { name: "OpenAI-style key", test: (l) => /\bsk-(proj-|ant-)?[A-Za-z0-9_-]{20,}/.test(l) },
   { name: "GitHub token", test: (l) => /\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})/.test(l) },
@@ -68,7 +80,7 @@ const RULES = [
   { name: "Google API key", test: (l) => /\bAIza[0-9A-Za-z_-]{35}\b/.test(l) },
   { name: "RPC URL with key", test: (l) => /(alchemy\.com\/v2\/|infura\.io\/v3\/|quiknode\.pro\/|drpc\.org\/[^\s"']*dkey=)[A-Za-z0-9_-]{16,}/.test(l) },
   { name: "database URL with password", test: (l) => /\b(postgres(ql)?|mysql|mongodb(\+srv)?|redis):\/\/[^\s:/@"']+:[^\s@"']+@/.test(l) },
-  { name: "assigned API key", test: (l) => anyMatch(ASSIGNED, l) || anyMatch(QUERY, l) || anyMatch(BEARER, l) },
+  { name: "assigned API key", test: (l) => assigned(l) || anyMatch(QUERY, l) || anyMatch(BEARER, l) },
 ];
 
 /* Env files: only the example file may be committed, and only with empty values. */

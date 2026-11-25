@@ -73,3 +73,32 @@ test("allow marker and key files", () => {
   assert.deepEqual(rules("a.ts", `const PRIVATE_KEY = "0x${hex64}"; // secret-scan: allow`), []);
   assert.deepEqual(rules("deploy.pem", "anything"), ["key file in git"]);
 });
+
+test("names that only contain a public word still count as keys", () => {
+  for (const line of [
+    `const BLOCKCHAIN_PRIVATE_KEY = "0x${hex64}";`,
+    `ROOT_KEY=0x${hex64}`,
+    `const rootSignerKey = "0x${hex64}";`,
+    `commitWalletKey: "0x${hex64}",`,
+    `DEPLOYER_PK=0x${hex64}`,
+  ]) {
+    assert.ok(rules("deploy.ts", line).includes("hex private key"), line);
+  }
+});
+
+test("64-hex values under a secret name, in a Bearer header or a token query", () => {
+  const hex = "3f9a".repeat(16);
+  assert.deepEqual(rules("a.ts", `const authToken = "${hex}";`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `password: "${hex}"`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `Authorization: Bearer ${hex}`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `fetch("https://api.example.com/feed?token=${hex}")`), ["assigned API key"]);
+});
+
+test("explorer links, URLs and the word seed are not secrets", () => {
+  const tx = "0x" + "eda4ebee75".repeat(6) + "8c2a";
+  assert.deepEqual(rules("reactive/README.md", `| Seed 0.01 ETH (position 34377) | [\`0xeda4…8c2a\`](https://sepolia.basescan.org/tx/${tx}) | 63531666 |`), []);
+  assert.deepEqual(rules("a.ts", `account deployed in https://sepolia.basescan.org/tx/${tx}`), []);
+  assert.deepEqual(rules("a.ts", `const CMC_TOKEN_INFO_URL = "https://pro-api.coinmarketcap.com/v2/cryptocurrency/info";`), []);
+  assert.deepEqual(rules("a.ts", `const authorName = "${rnd}";`), []);
+});
+
