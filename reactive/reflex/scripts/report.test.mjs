@@ -36,6 +36,7 @@ function fixture() {
       run(2, 1, 5),
       run(3, 4, 18),
       { run: 4, oldFee: 100_000, newFee: 500, feeTx: hash("4"), feeBlock: 1400, feeTime: 1_795_700_240, result: "no mark within 180 s" },
+      run(5, 3, 14, { result: "kept" }),
     ],
   };
 }
@@ -51,7 +52,7 @@ test("median and nearest-rank quantile", () => {
 test("latency covers only marked runs and counts every run", () => {
   const page = buildPage(fixture(), { generatedAt: "now" });
   assert.equal(page.schema, SCHEMA);
-  assert.equal(page.latency.runs, 4);
+  assert.equal(page.latency.runs, 5);
   assert.equal(page.latency.n, 3);
   assert.equal(page.latency.medianSeconds, 2);
   assert.equal(page.latency.medianBlocks, 9);
@@ -82,8 +83,10 @@ test("marksNow is a live snapshot only when statuses are given", () => {
 
 test("the README block is replaced in place, never duplicated", () => {
   const block = readmeBlock(buildPage(fixture()));
-  assert.match(block, /3 of 4 fee changes marked/);
+  assert.match(block, /3 of 5 fee changes marked/);
   assert.match(block, /\| 4 \| 10% → 0\.05% \|/);
+  assert.match(block, /\| — \| kept \|$/m, "a kept run shows its result, not a latency");
+  assert.match(block, /\| — \| no mark within 180 s \|$/m);
   const once = withReadmeBlock("# reactive\n\nintro\n", block);
   const twice = withReadmeBlock(once, block);
   assert.equal(twice, once);

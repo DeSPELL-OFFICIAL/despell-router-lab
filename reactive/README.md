@@ -33,7 +33,7 @@ event FeeUpdated(PoolId indexed poolId, uint24 oldFee, uint24 newFee); // fees i
 - One event per change. The Uniswap v4 PoolManager emits nothing when a dynamic fee changes, and other hooks announce
   fee changes in their own ways, so this hook gives the change a single, known shape.
 - The first one for a pool (`0 → 500`) comes in the same transaction as the PoolManager's `Initialize`. For this pool
-  that is block 63531662. A subscriber treats it as the baseline, not as a change: the Reactive contract (DES-698)
+  that is block 63531662. A subscriber treats it as the baseline, not as a change: the Reactive contract below
   subscribes after it.
 
 ### Transactions
@@ -126,6 +126,11 @@ The rules it keeps:
 The reflex table is the router's, change kind by change kind: code, token code, implementation or failed-sell
 changes block (3); owner, fee, reserve or round-trip-loss changes narrow (2); `paused` and `stale` do not mark. The
 test pool can only change its fee, so only `fee_changed` is wired to an event.
+
+### Measured latency
+
+<!-- reflex-latency:begin -->
+<!-- reflex-latency:end -->
 
 `reflex/` is its own Foundry project: `reactive-lib-omni` needs solc ^0.8.29, while the hook above stays on 0.8.26 so
 its deployed bytecode can be rebuilt.

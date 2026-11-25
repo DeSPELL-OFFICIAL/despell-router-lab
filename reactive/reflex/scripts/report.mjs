@@ -129,7 +129,8 @@ export function readmeBlock(page) {
     ...page.journal.map(
       (j) =>
         `| ${j.run} | ${j.change?.label ?? "—"} | ${link(j.origin)} | ${link(j.reactive)} | ${link(j.mark)} | ` +
-        `${j.blocks ?? "—"} | ${j.seconds ?? j.result} |`,
+        // Only a run that marked the pool counts as a latency; anything else shows what happened instead.
+        (j.result === "marked" ? `${j.blocks} | ${j.seconds} |` : `— | ${j.result} |`),
     ),
     README_END,
   ];
