@@ -38,4 +38,17 @@ describe("SignCard", () => {
     const html = renderToStaticMarkup(<SignCard {...EMPTY_SWAP} route={{ label: null }} />);
     expect(html).toMatch(/data-row="route"><span class="ds-flow-k">Route<\/span><span class="ds-flow-v is-empty">/);
   });
+
+  it("renders repeated labels without dropping rows", () => {
+    const html = renderToStaticMarkup(
+      <SignCard
+        {...EXAMPLE_SWAP}
+        cost={{ total: "$0.02", items: [{ label: "Gas", value: "$0.01" }, { label: "Gas", value: "$0.01" }] }}
+        check={{ tone: "ok", title: "ok", detail: [["Chain", "Base Sepolia"], ["Chain", "GIWA Sepolia"]] }}
+      />,
+    );
+    expect(html.match(/<span>Gas<\/span>/g)).toHaveLength(2);
+    expect(html).toContain("Base Sepolia");
+    expect(html).toContain("GIWA Sepolia");
+  });
 });

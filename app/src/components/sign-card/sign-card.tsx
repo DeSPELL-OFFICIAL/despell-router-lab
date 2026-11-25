@@ -136,8 +136,9 @@ function CostFold({ cost }: { cost?: SignCardProps["cost"] }) {
             <span>Gas, route fee and DeSpell fee appear here</span>
           </div>
         ) : (
-          items.map((item) => (
-            <div key={item.label}>
+          items.map((item, i) => (
+            // Rows are a fixed list per render; labels may repeat (two gas lines on two chains).
+            <div key={i}>
               <span>{item.label}</span>
               <span className="v">{item.value}</span>
             </div>
@@ -182,8 +183,8 @@ function CheckBox({ check }: { check?: CardCheck }) {
         </span>
       </summary>
       <dl className="ds-sum-detail">
-        {detail.map(([k, v]) => (
-          <div key={k} style={{ display: "contents" }}>
+        {detail.map(([k, v], i) => (
+          <div key={i} style={{ display: "contents" }}>
             <dt>{k}</dt>
             <dd>{v}</dd>
           </div>

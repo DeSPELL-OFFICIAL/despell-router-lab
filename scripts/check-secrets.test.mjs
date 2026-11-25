@@ -4,6 +4,9 @@ import { scanText } from "./check-secrets.mjs";
 
 // Fixtures are assembled at run time so this file itself never matches a rule.
 const hex64 = "ab".repeat(32);
+const addr = "0x" + "c0ffee".repeat(6) + "beef";
+const rnd = "Qz7" + "k2Pq9".repeat(5); // 28 chars, letters and digits
+const words = (n) => Array.from({ length: n }, (_, i) => ["abandon", "ability", "able", "about"][i % 4]).join(" ");
 const rules = (path, text) => scanText(path, text).map((f) => f.rule);
 
 test("flags a private key but not a transaction hash", () => {
@@ -19,9 +22,41 @@ test("flags common token shapes", () => {
   assert.deepEqual(rules("a.ts", "ghp_" + "A".repeat(36)), ["GitHub token"]);
   assert.deepEqual(rules("a.ts", "https://base-sepolia.g.alchemy.com/v2/" + "x".repeat(32)), ["RPC URL with key"]);
   assert.deepEqual(rules("a.ts", "postgres://reader:" + "hunter2" + "@db.example/journal"), ["database URL with password"]);
-  assert.deepEqual(rules("a.ts", `cmcApiKey: "${"Q".repeat(24)}"`), ["assigned API key"]);
-  assert.deepEqual(rules("a.ts", `CMC_API_KEY_V2: "${"Q".repeat(24)}"`), ["assigned API key"]);
-  assert.deepEqual(rules("a.ts", `const supabaseKey = "${"eyJ" + "a".repeat(10) + "." + "b".repeat(10)}";`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `cmcApiKey: "${rnd}"`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `CMC_API_KEY_V2: "${rnd}"`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `const supabaseKey = "${"eyJ" + "a1".repeat(6) + "." + "b2".repeat(6)}";`), ["assigned API key"]);
+});
+
+test("unquoted values: shell, yaml, headers, query strings, Bearer", () => {
+  assert.deepEqual(rules("deploy.sh", `export CMC_API_KEY=${rnd}`), ["assigned API key"]);
+  assert.deepEqual(rules("ci.yml", `  api_key: ${rnd}`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `curl -H 'X-CMC_PRO_API_KEY: ${rnd}'`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `fetch("https://api.example.com/v1/q?symbol=NVDA&key=${rnd}")`), ["assigned API key"]);
+  assert.deepEqual(rules("a.ts", `Authorization: Bearer ${rnd}`), ["assigned API key"]);
+});
+
+test("public values and lookups are not secrets", () => {
+  assert.deepEqual(rules("a.ts", `const USDC_TOKEN_ADDRESS = "${addr}";`), []);
+  assert.deepEqual(rules("a.ts", `tokenAddress: ${addr},`), []);
+  assert.deepEqual(rules("a.ts", `const apiKey = process.env.CMC_API_KEY;`), []);
+  assert.deepEqual(rules("ci.yml", "  CMC_API_KEY: ${{ secrets.CMC_API_KEY }}"), []);
+  assert.deepEqual(rules("a.ts", `headers: { "X-CMC_PRO_API_KEY": key }`), []);
+  assert.deepEqual(rules("a.ts", `Authorization: \`Bearer \${token}\``), []);
+  assert.deepEqual(rules("a.ts", `apiKey: string;`), []);
+});
+
+test("64 hex: hashes and pool ids pass, a key on the line above is caught", () => {
+  assert.deepEqual(rules("a.ts", `const POOL_KEY_HASH = "0x${hex64}";`), []);
+  assert.deepEqual(rules("a.ts", `poolId: "0x${hex64}", txHash: "0x${hex64}"`), []);
+  assert.deepEqual(rules("README.md", `| fee change | 0x${hex64} |`), []);
+  assert.deepEqual(rules("a.ts", `const deployer =\n  "0x${hex64}";`), []);
+  assert.deepEqual(rules("a.ts", `const signerKey =\n  "0x${hex64}";`), ["hex private key"]);
+});
+
+test("seed phrases", () => {
+  assert.deepEqual(rules("a.ts", `const words = "${words(12)}";`), ["seed phrase"]);
+  assert.deepEqual(rules("a.ts", `mnemonic: '${words(24)}'`), ["seed phrase"]);
+  assert.deepEqual(rules("a.ts", `const s = "${words(11)}";`), []);
 });
 
 test("env files: only an example with empty values", () => {
