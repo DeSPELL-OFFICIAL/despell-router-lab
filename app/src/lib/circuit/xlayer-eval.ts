@@ -54,10 +54,28 @@ export class CircuitRefusedError extends Error {
   }
 }
 
-/** The chain said no: a revert, or no data (an address with no code). Not a network failure. */
+/** The node's own JSON-RPC error code: the deepest numeric `code` in the cause chain (viem's wrappers sit above it). */
+export function nodeErrorCode(error: unknown): number | null {
+  let code: number | null = null;
+  for (let e: unknown = error; e && typeof e === "object"; e = (e as { cause?: unknown }).cause) {
+    const c = (e as { code?: unknown }).code;
+    if (typeof c === "number") code = c;
+  }
+  return code;
+}
+
+/**
+ * The chain said no: an empty answer (an address with no code), revert data, or the node's JSON-RPC code 3
+ * (execution reverted). viem also reports an internal error (-32603) that carries a message as a revert; that one,
+ * like a rate limit, is a transport failure here, not an answer.
+ */
 export function chainSaidNo(error: unknown): boolean {
   if (!(error instanceof BaseError)) return false;
-  return Boolean(error.walk((e) => e instanceof ContractFunctionRevertedError || e instanceof ContractFunctionZeroDataError));
+  if (error.walk((e) => e instanceof ContractFunctionZeroDataError)) return true;
+  const reverted = error.walk((e) => e instanceof ContractFunctionRevertedError);
+  if (!(reverted instanceof ContractFunctionRevertedError)) return false;
+  if (reverted.raw && reverted.raw !== "0x") return true;
+  return nodeErrorCode(error) === 3;
 }
 
 async function read<T>(what: string, call: () => Promise<T>): Promise<T> {
@@ -128,10 +146,24 @@ export async function judgeOnXLayer(client: PublicClient, deployment: CircuitDep
   return { vector, outputs, judgment, block };
 }
 
-/** The circuit check's read: the configured circuit verified once, then its judgment of `input`. */
-export async function verifiedJudgment(client: PublicClient, deployment: CircuitDeployment, input: JudgmentInput): Promise<OnChainJudgment> {
-  await verifyOnce(client, deployment);
-  return judgeOnXLayer(client, deployment, input);
+/** What X Layer decided: a judgment, or that this is not the circuit. Transport failures are thrown instead. */
+export type CircuitAnswer =
+  | { kind: "answered"; judgment: Judgment; block: bigint }
+  | { kind: "refused"; problem: CircuitProblem; reason: string };
+
+/**
+ * The circuit check's read: the configured circuit verified once, then its judgment of `input`. A refusal is a
+ * result, not an error, so the last decisive answer survives a later transport failure.
+ */
+export async function readCircuit(client: PublicClient, deployment: CircuitDeployment, input: JudgmentInput): Promise<CircuitAnswer> {
+  try {
+    await verifyOnce(client, deployment);
+    const { judgment, block } = await judgeOnXLayer(client, deployment, input);
+    return { kind: "answered", judgment, block };
+  } catch (error) {
+    if (error instanceof CircuitRefusedError) return { kind: "refused", problem: error.problem, reason: error.message };
+    throw error;
+  }
 }
 
 let client: PublicClient | null = null;

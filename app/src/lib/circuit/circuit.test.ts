@@ -8,7 +8,7 @@ import { SELECTOR } from "@despell-lab/xlayer/src/onchain.ts";
 import { GIWA_SEPOLIA, BASE_SEPOLIA } from "@/lib/swap/chains";
 import { canSign } from "@/components/sign-card/sign-card";
 import { CIRCUIT, evaluateLocally, parseDeployment, type CircuitDeployment } from "./circuit";
-import { checkFrom, circuitGate, circuitLine, latestRead, MISMATCH_TITLE, REFUSED_TITLE, sameJudgment, serverMark, type CircuitCheck } from "./check";
+import { checkFrom, checkFromQuery, circuitGate, circuitLine, MISMATCH_TITLE, REFUSED_TITLE, sameJudgment, serverMark, type CircuitCheck, type QueryState } from "./check";
 import { serverJudgmentFor } from "./server-judgment";
 import { EVAL_ABI, judgeOnXLayer } from "./xlayer-eval";
 
@@ -79,12 +79,35 @@ describe("checkFrom (the hook's wiring)", () => {
     }
   });
 
-  it("counts the newest outcome: a failed re-judge is not the old answer", () => {
-    const old = { judgment: server.judgment, block: 5n };
-    const failed = { status: "failed" as const, reason: "HTTP 429" };
-    expect(latestRead({ rejudging: false, data: old, dataUpdatedAt: 100, error: failed, errorUpdatedAt: 200 })).toEqual(failed);
-    expect(latestRead({ rejudging: false, data: old, dataUpdatedAt: 300, error: failed, errorUpdatedAt: 200 }).status).toBe("answered");
-    expect(latestRead({ rejudging: true, data: old, dataUpdatedAt: 300, error: null, errorUpdatedAt: 0 }).status).toBe("asking");
+});
+
+describe("checkFromQuery: a re-judge that fails in transport", () => {
+  const q = (over: Partial<QueryState>): QueryState => ({ rejudging: false, data: undefined, dataUpdatedAt: 0, failure: null, failureUpdatedAt: 0, ...over });
+  const same = { kind: "answered" as const, judgment: server.judgment, block: 5n };
+  const differs = { kind: "answered" as const, judgment: { stage: "blocked" as const, lane: "closed" as const }, block: 5n };
+  const refused = { kind: "refused" as const, problem: "not-found" as const, reason: "eval reverted" };
+
+  it("keeps a hold: after 'differs' or 'refused' the card stays held, marked re-judge failed", () => {
+    for (const earlier of [differs, refused]) {
+      const r = checkFromQuery(server, DEPLOYMENT, q({ data: earlier, dataUpdatedAt: 100, failure: "HTTP 429", failureUpdatedAt: 200 }));
+      expect(circuitGate(r.check).state).toBe("hold");
+      expect(r.rejudgeFailed).toBe(true);
+    }
+  });
+
+  it("does not show the old 'same judgment' after a failed re-judge: nothing is compared", () => {
+    const r = checkFromQuery(server, DEPLOYMENT, q({ data: same, dataUpdatedAt: 100, failure: "HTTP 429", failureUpdatedAt: 200 }));
+    expect(r.check.kind).toBe("unreachable");
+    expect(r.rejudgeFailed).toBe(true);
+  });
+
+  it("takes a newer answer over an older failure, and is checking while re-judging", () => {
+    expect(checkFromQuery(server, DEPLOYMENT, q({ data: same, dataUpdatedAt: 300, failure: "HTTP 429", failureUpdatedAt: 200 })).check.kind).toBe("same");
+    expect(checkFromQuery(server, DEPLOYMENT, q({ rejudging: true, data: differs, dataUpdatedAt: 300 })).check.kind).toBe("checking");
+    expect(checkFromQuery(server, DEPLOYMENT, q({ failure: "timeout", failureUpdatedAt: 1 }))).toEqual({
+      check: { kind: "unreachable", server, deployment: DEPLOYMENT, reason: "timeout" },
+      rejudgeFailed: false,
+    });
   });
 
   it("never asks without a server judgment or a deployment", () => {
@@ -95,7 +118,8 @@ describe("checkFrom (the hook's wiring)", () => {
 
 describe("verifyCircuit", () => {
   /** A fake processor: answers circuitInfo and netlist, or fails the way it is told to. */
-  function node(answer: { info?: readonly [bigint, bigint, bigint, bigint]; netlist?: Hex; fail?: "revert" | "empty" | "rate-limit" }) {
+  type Fail = "revert" | "empty" | "rate-limit" | "internal-reverted-text" | "internal-limit-text" | "internal-with-revert-data";
+  function node(answer: { info?: readonly [bigint, bigint, bigint, bigint]; netlist?: Hex; fail?: Fail }) {
     const transport = custom({
       async request({ method, params }: { method: string; params?: unknown }) {
         if (method === "eth_chainId") return "0xc4";
@@ -103,6 +127,11 @@ describe("verifyCircuit", () => {
         if (answer.fail === "revert") throw Object.assign(new Error("execution reverted"), { code: 3, data: "0x" });
         if (answer.fail === "empty") return "0x";
         if (answer.fail === "rate-limit") throw Object.assign(new Error("rate limited"), { code: -32005 });
+        // -32603 is an internal error: viem reports it as a revert when it carries a message, but only revert data
+        // (or code 3) is the chain answering.
+        if (answer.fail === "internal-reverted-text") throw Object.assign(new Error("execution reverted"), { code: -32603 });
+        if (answer.fail === "internal-limit-text") throw Object.assign(new Error("request limit reached, try again"), { code: -32603 });
+        if (answer.fail === "internal-with-revert-data") throw Object.assign(new Error("execution reverted"), { code: -32603, data: "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a6e6f2063697263756974000000000000000000000000000000000000000000" });
         const [call] = params as [{ data: Hex }];
         const { functionName } = decodeFunctionData({ abi: CIRCUIT_ABI, data: call.data });
         if (functionName === "circuitInfo") return encodeFunctionResult({ abi: CIRCUIT_ABI, functionName, result: answer.info ?? [27n, 5n, 0n, 157n] });
@@ -123,11 +152,17 @@ describe("verifyCircuit", () => {
     await expect(verifyCircuit(node({ netlist: other }), DEPLOYMENT)).rejects.toMatchObject({ problem: "wrong-circuit" });
   });
 
-  it("calls a revert or an empty answer 'not found', and leaves a rate limit as a network failure", async () => {
-    await expect(verifyCircuit(node({ fail: "revert" }), DEPLOYMENT)).rejects.toMatchObject({ problem: "not-found" });
-    await expect(verifyCircuit(node({ fail: "empty" }), DEPLOYMENT)).rejects.toMatchObject({ problem: "not-found" });
-    const limited = await verifyCircuit(node({ fail: "rate-limit" }), DEPLOYMENT).catch((e: unknown) => e);
-    expect(limited).not.toBeInstanceOf(CircuitRefusedError);
+  it("calls code 3, revert data or an empty answer 'not found'", async () => {
+    for (const fail of ["revert", "empty", "internal-with-revert-data"] as const) {
+      await expect(verifyCircuit(node({ fail }), DEPLOYMENT), fail).rejects.toMatchObject({ problem: "not-found" });
+    }
+  });
+
+  it("leaves a rate limit or an internal error (-32603) without revert data as a network failure", async () => {
+    for (const fail of ["rate-limit", "internal-reverted-text", "internal-limit-text"] as const) {
+      const error = await verifyCircuit(node({ fail }), DEPLOYMENT).catch((e: unknown) => e);
+      expect(error, fail).not.toBeInstanceOf(CircuitRefusedError);
+    }
   });
 
   it("uses the selectors xlayer/src/onchain.ts uses", () => {

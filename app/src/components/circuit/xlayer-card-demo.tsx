@@ -10,14 +10,14 @@ import { GIWA_SEPOLIA } from "@/lib/swap/chains";
 
 /** The GIWA Sepolia swap card with the pool judgment circuit's line and gate. */
 export function XLayerCardDemo({ demoMismatch }: { demoMismatch: boolean }) {
-  const { check } = useCircuitCheck(GIWA_SEPOLIA.id, GIWA_SEPOLIA.pool.address, { demoMismatch });
+  const { check, rejudgeFailed } = useCircuitCheck(GIWA_SEPOLIA.id, GIWA_SEPOLIA.pool.address, { demoMismatch });
   const href = circuitPageHref(GIWA_SEPOLIA.pool.address, demoMismatch);
   return (
     <SwapCard
       chain={GIWA_SEPOLIA}
       amountIn={DEMO_USDC}
       gate={circuitGate(check)}
-      checkLine={circuitLine(check) ? <CircuitLine check={check} href={href} /> : undefined}
+      checkLine={circuitLine(check) ? <CircuitLine check={check} href={href} rejudgeFailed={rejudgeFailed} /> : undefined}
     />
   );
 }

@@ -1,7 +1,7 @@
 import type { Judgment } from "@despell-lab/xlayer/src/rule.ts";
 import type { ContestGate } from "@/lib/swap/view";
 import type { CircuitDeployment } from "./circuit";
-import type { CircuitProblem } from "./xlayer-eval";
+import type { CircuitAnswer, CircuitProblem } from "./xlayer-eval";
 import type { ServerJudgment } from "./server-judgment";
 
 /*
@@ -69,20 +69,32 @@ export const REFUSED_TITLE: Record<CircuitProblem, string> = {
 };
 const REFUSED_STATUS: Record<CircuitProblem, string> = { "not-found": "not found", "wrong-circuit": "wrong circuit", "not-a-judgment": "not a judgment" };
 
-/**
- * Which read outcome counts: the newest one. A re-judge that fails after an earlier answer is a failure, not the old
- * answer; a read in flight (first load or an explicit re-judge) is asking.
- */
-export function latestRead(q: {
+export type QueryState = {
   rejudging: boolean;
-  data: { judgment: Judgment; block: bigint } | undefined;
+  /** The last decisive answer from X Layer (a judgment, or "not this circuit"). */
+  data: CircuitAnswer | undefined;
   dataUpdatedAt: number;
-  error: { status: "refused"; problem: CircuitProblem; reason: string } | { status: "failed"; reason: string } | null;
-  errorUpdatedAt: number;
-}): EvalState {
-  if (q.rejudging || (!q.data && !q.error)) return { status: "asking" };
-  if (q.error && (!q.data || q.errorUpdatedAt >= q.dataUpdatedAt)) return q.error;
-  return { status: "answered", judgment: q.data!.judgment, block: q.data!.block };
+  /** The last transport failure, if any. */
+  failure: string | null;
+  failureUpdatedAt: number;
+};
+
+const fromAnswer = (a: CircuitAnswer): EvalState =>
+  a.kind === "answered" ? { status: "answered", judgment: a.judgment, block: a.block } : { status: "refused", problem: a.problem, reason: a.reason };
+
+/**
+ * The check from the query that asks X Layer. The newest outcome counts, with one exception that only keeps the card
+ * held: a re-judge that fails in transport after a decisive answer that held the card (differs, refused) keeps that
+ * hold. After an answer that let the card through, the failure is shown as a failure, never as the old answer.
+ * `rejudgeFailed` marks a failure that came after an earlier answer, for the screen.
+ */
+export function checkFromQuery(server: ServerJudgment | null, deployment: CircuitDeployment | null, q: QueryState): { check: CircuitCheck; rejudgeFailed: boolean } {
+  if (q.rejudging || (!q.data && !q.failure)) return { check: checkFrom(server, deployment, { status: "asking" }), rejudgeFailed: false };
+  const earlier = q.data ? checkFrom(server, deployment, fromAnswer(q.data)) : null;
+  const failedLast = q.failure !== null && (!q.data || q.failureUpdatedAt >= q.dataUpdatedAt);
+  if (!failedLast) return { check: earlier!, rejudgeFailed: false };
+  if (earlier && circuitGate(earlier).state === "hold") return { check: earlier, rejudgeFailed: true };
+  return { check: checkFrom(server, deployment, { status: "failed", reason: q.failure! }), rejudgeFailed: earlier !== null };
 }
 
 const show = (j: Judgment) => `${j.stage}, ${j.lane} lane`;

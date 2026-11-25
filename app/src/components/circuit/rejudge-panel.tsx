@@ -9,7 +9,7 @@ import { PinTable } from "./pin-table";
 
 /** The circuit's answer from X Layer for this pool, compared with the server's, and [Re-judge on X Layer]. */
 export function RejudgePanel({ chainId, pool, demoMismatch }: { chainId: number; pool: string; demoMismatch: boolean }) {
-  const { check, rejudge, asking } = useCircuitCheck(chainId, pool, { demoMismatch });
+  const { check, rejudge, asking, rejudgeFailed } = useCircuitCheck(chainId, pool, { demoMismatch });
   if (check.kind === "none") return null;
   const status =
     check.kind === "same"
@@ -36,6 +36,11 @@ export function RejudgePanel({ chainId, pool, demoMismatch }: { chainId: number;
       <p className={`lab-circuit-verdict is-${status.tone}`} role="status">
         {status.text}
       </p>
+      {rejudgeFailed && (
+        <p className="lab-note" data-rejudge="failed">
+          The last re-judge failed in transport; {check.kind === "unreachable" ? "nothing is compared now." : "the earlier answer above still holds the card."}
+        </p>
+      )}
       {check.kind === "same" || check.kind === "differs" ? (
         <>
           <PinTable rows={outputRows(encodeOutput(check.circuit))} />

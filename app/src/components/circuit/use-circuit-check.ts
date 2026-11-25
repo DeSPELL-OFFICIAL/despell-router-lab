@@ -3,9 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { DEPLOYMENT } from "@/lib/circuit/circuit";
-import { checkFrom, latestRead, type CircuitCheck } from "@/lib/circuit/check";
+import { checkFromQuery, type CircuitCheck } from "@/lib/circuit/check";
 import { serverJudgmentFor } from "@/lib/circuit/server-judgment";
-import { CircuitRefusedError, verifiedJudgment, xLayerClient } from "@/lib/circuit/xlayer-eval";
+import { readCircuit, xLayerClient } from "@/lib/circuit/xlayer-eval";
 
 const firstLine = (e: unknown) => (e instanceof Error ? ((e as { shortMessage?: string }).shortMessage ?? e.message) : String(e)).split("\n")[0];
 
@@ -15,14 +15,19 @@ const firstLine = (e: unknown) => (e instanceof Error ? ((e as { shortMessage?: 
  * background refetch (reconnect, focus, remount) turns an answered check back to checking: a pending gate between two
  * transactions would stop a swap halfway.
  */
-export function useCircuitCheck(chainId: number, pool: string, opts: { demoMismatch?: boolean } = {}): { check: CircuitCheck; rejudge: () => void; asking: boolean } {
+export function useCircuitCheck(
+  chainId: number,
+  pool: string,
+  opts: { demoMismatch?: boolean } = {},
+): { check: CircuitCheck; rejudge: () => void; asking: boolean; rejudgeFailed: boolean } {
   const server = serverJudgmentFor(chainId, pool, opts);
   const deployment = DEPLOYMENT;
   const q = useQuery({
     queryKey: ["circuit-eval", deployment?.processor, deployment?.circuitId.toString(), chainId, pool.toLowerCase()],
-    queryFn: () => verifiedJudgment(xLayerClient(), deployment!, server!.input),
+    // A refusal comes back as data, so only transport failures are errors (and retried).
+    queryFn: () => readCircuit(xLayerClient(), deployment!, server!.input),
     enabled: Boolean(server && deployment),
-    retry: (count, error) => !(error instanceof CircuitRefusedError) && count < 2,
+    retry: 2,
     staleTime: Infinity,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
@@ -32,12 +37,12 @@ export function useCircuitCheck(chainId: number, pool: string, opts: { demoMisma
     setRejudging(true);
     void q.refetch().finally(() => setRejudging(false));
   };
-  const error = q.error
-    ? q.error instanceof CircuitRefusedError
-      ? { status: "refused" as const, problem: q.error.problem, reason: q.error.message }
-      : { status: "failed" as const, reason: firstLine(q.error) }
-    : null;
-  const read = latestRead({ rejudging, data: q.data, dataUpdatedAt: q.dataUpdatedAt, error, errorUpdatedAt: q.errorUpdatedAt });
-  const check = checkFrom(server, deployment, read);
-  return { check, rejudge, asking: check.kind === "checking" };
+  const { check, rejudgeFailed } = checkFromQuery(server, deployment, {
+    rejudging,
+    data: q.data,
+    dataUpdatedAt: q.dataUpdatedAt,
+    failure: q.error ? firstLine(q.error) : null,
+    failureUpdatedAt: q.errorUpdatedAt,
+  });
+  return { check, rejudge, asking: check.kind === "checking", rejudgeFailed };
 }
