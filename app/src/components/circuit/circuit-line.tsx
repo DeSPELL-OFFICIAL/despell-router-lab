@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { circuitLine, type CircuitCheck } from "@/lib/circuit/check";
+import { circuitLine, serverMark, type CircuitCheck } from "@/lib/circuit/check";
 
 /**
  * "Pool judgment circuit #7 · same judgment · View circuit": the one line a card's check box shows for the circuit.
@@ -8,7 +8,8 @@ import { circuitLine, type CircuitCheck } from "@/lib/circuit/check";
  */
 export function CircuitLine({ check, href }: { check: CircuitCheck; href: Route }) {
   const line = circuitLine(check);
-  if (!line) return null;
+  if (!line || check.kind === "none") return null;
+  const mark = serverMark(check.server);
   return (
     <>
       <span>{line.circuit}</span>
@@ -16,6 +17,12 @@ export function CircuitLine({ check, href }: { check: CircuitCheck; href: Route 
       <span className={`lab-circuit-status is-${line.tone}`} data-circuit={check.kind}>
         {line.status}
       </span>
+      {mark ? (
+        <>
+          <span aria-hidden="true">·</span>
+          <span className="lab-circuit-source">{mark}</span>
+        </>
+      ) : null}
       <span aria-hidden="true">·</span>
       <Link href={href}>View circuit</Link>
     </>

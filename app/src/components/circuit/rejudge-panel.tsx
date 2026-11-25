@@ -2,7 +2,7 @@
 
 import { useCircuitCheck } from "@/components/circuit/use-circuit-check";
 import { X_LAYER } from "@/lib/circuit/circuit";
-import { MALFORMED_TITLE, MISMATCH_TITLE } from "@/lib/circuit/check";
+import { MISMATCH_TITLE, REFUSED_TITLE } from "@/lib/circuit/check";
 import { encodeOutput } from "@despell-lab/xlayer/src/bits.ts";
 import { outputRows } from "@/lib/circuit/pins";
 import { PinTable } from "./pin-table";
@@ -20,8 +20,8 @@ export function RejudgePanel({ chainId, pool, demoMismatch }: { chainId: number;
           ? { text: "Asking X Layer…", tone: "plain" }
           : check.kind === "unreachable"
             ? { text: `X Layer not reached (${check.reason})`, tone: "plain" }
-            : check.kind === "malformed"
-              ? { text: `${MALFORMED_TITLE}: ${check.reason}`, tone: "stop" }
+            : check.kind === "refused"
+              ? { text: `${REFUSED_TITLE[check.problem]}: ${check.reason}`, tone: "stop" }
             : { text: "Being prepared: the circuit is not taped out on X Layer yet", tone: "plain" };
   return (
     <section className="lab-panel" aria-labelledby="onchain-h" data-circuit={check.kind}>

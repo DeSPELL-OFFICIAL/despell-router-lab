@@ -1,4 +1,5 @@
 import { createPublicClient, custom, decodeFunctionData, encodeFunctionResult, hexToBytes, toFunctionSelector, type Hex, type PublicClient } from "viem";
+import { CIRCUIT_ABI, CircuitRefusedError, verifyCircuit } from "./xlayer-eval";
 import { xLayer } from "viem/chains";
 import { describe, expect, it } from "vitest";
 import { packPins, OUTPUT_COUNT, unpackPins } from "@despell-lab/xlayer/src/bits.ts";
@@ -7,9 +8,9 @@ import { SELECTOR } from "@despell-lab/xlayer/src/onchain.ts";
 import { GIWA_SEPOLIA, BASE_SEPOLIA } from "@/lib/swap/chains";
 import { canSign } from "@/components/sign-card/sign-card";
 import { CIRCUIT, evaluateLocally, parseDeployment, type CircuitDeployment } from "./circuit";
-import { checkFrom, circuitGate, circuitLine, MALFORMED_TITLE, MISMATCH_TITLE, sameJudgment, type CircuitCheck } from "./check";
+import { checkFrom, circuitGate, circuitLine, latestRead, MISMATCH_TITLE, REFUSED_TITLE, sameJudgment, serverMark, type CircuitCheck } from "./check";
 import { serverJudgmentFor } from "./server-judgment";
-import { EVAL_ABI, judgeOnXLayer, NotAJudgmentError } from "./xlayer-eval";
+import { EVAL_ABI, judgeOnXLayer } from "./xlayer-eval";
 
 const DEPLOYMENT: CircuitDeployment = { processor: "0x1111111111111111111111111111111111111111", circuitId: 7n };
 const server = serverJudgmentFor(GIWA_SEPOLIA.id, GIWA_SEPOLIA.pool.address)!;
@@ -69,18 +70,76 @@ describe("checkFrom (the hook's wiring)", () => {
     expect(circuitGate(check).state).toBe("ok");
   });
 
-  // A circuit id pointing at another circuit answers with bits that are not a judgment: that is the chain
-  // disagreeing, not the network failing, so the card holds.
-  it("holds the card when X Layer answers with something that is not a judgment", () => {
-    const check = checkFrom(server, DEPLOYMENT, { status: "malformed", reason: "the circuit answered 0x6, which is not a judgment" });
-    expect(check.kind).toBe("malformed");
-    expect(circuitGate(check)).toMatchObject({ state: "hold", title: MALFORMED_TITLE });
-    expect(circuitLine(check)?.status).toBe("not a judgment");
+  // The chain answering "no" (not there, another circuit, not a judgment) is not the network failing: the card holds.
+  it("holds the card when X Layer says the circuit is not there or not this one", () => {
+    for (const [problem, status] of [["not-found", "not found"], ["wrong-circuit", "wrong circuit"], ["not-a-judgment", "not a judgment"]] as const) {
+      const check = checkFrom(server, DEPLOYMENT, { status: "refused", problem, reason: "…" });
+      expect(circuitGate(check)).toMatchObject({ state: "hold", title: REFUSED_TITLE[problem] });
+      expect(circuitLine(check)?.status).toBe(status);
+    }
+  });
+
+  it("counts the newest outcome: a failed re-judge is not the old answer", () => {
+    const old = { judgment: server.judgment, block: 5n };
+    const failed = { status: "failed" as const, reason: "HTTP 429" };
+    expect(latestRead({ rejudging: false, data: old, dataUpdatedAt: 100, error: failed, errorUpdatedAt: 200 })).toEqual(failed);
+    expect(latestRead({ rejudging: false, data: old, dataUpdatedAt: 300, error: failed, errorUpdatedAt: 200 }).status).toBe("answered");
+    expect(latestRead({ rejudging: true, data: old, dataUpdatedAt: 300, error: null, errorUpdatedAt: 0 }).status).toBe("asking");
   });
 
   it("never asks without a server judgment or a deployment", () => {
     expect(checkFrom(null, DEPLOYMENT, { status: "asking" }).kind).toBe("none");
     expect(checkFrom(server, null, { status: "asking" }).kind).toBe("not-deployed");
+  });
+});
+
+describe("verifyCircuit", () => {
+  /** A fake processor: answers circuitInfo and netlist, or fails the way it is told to. */
+  function node(answer: { info?: readonly [bigint, bigint, bigint, bigint]; netlist?: Hex; fail?: "revert" | "empty" | "rate-limit" }) {
+    const transport = custom({
+      async request({ method, params }: { method: string; params?: unknown }) {
+        if (method === "eth_chainId") return "0xc4";
+        if (method !== "eth_call") throw new Error(`unexpected ${method}`);
+        if (answer.fail === "revert") throw Object.assign(new Error("execution reverted"), { code: 3, data: "0x" });
+        if (answer.fail === "empty") return "0x";
+        if (answer.fail === "rate-limit") throw Object.assign(new Error("rate limited"), { code: -32005 });
+        const [call] = params as [{ data: Hex }];
+        const { functionName } = decodeFunctionData({ abi: CIRCUIT_ABI, data: call.data });
+        if (functionName === "circuitInfo") return encodeFunctionResult({ abi: CIRCUIT_ABI, functionName, result: answer.info ?? [27n, 5n, 0n, 157n] });
+        if (functionName === "netlist") return encodeFunctionResult({ abi: CIRCUIT_ABI, functionName, result: answer.netlist ?? CIRCUIT.netlistHex });
+        throw new Error(`unexpected ${functionName}`);
+      },
+    });
+    return createPublicClient({ chain: xLayer, transport }) as PublicClient;
+  }
+
+  it("passes the circuit taped out from the committed netlist", async () => {
+    await expect(verifyCircuit(node({}), DEPLOYMENT)).resolves.toBeUndefined();
+  });
+
+  it("refuses another circuit: different pins or gates, or a different netlist", async () => {
+    await expect(verifyCircuit(node({ info: [14n, 5n, 0n, 46n] }), DEPLOYMENT)).rejects.toMatchObject({ problem: "wrong-circuit" });
+    const other = `${CIRCUIT.netlistHex.slice(0, -2)}${CIRCUIT.netlistHex.endsWith("ff") ? "00" : "ff"}` as Hex;
+    await expect(verifyCircuit(node({ netlist: other }), DEPLOYMENT)).rejects.toMatchObject({ problem: "wrong-circuit" });
+  });
+
+  it("calls a revert or an empty answer 'not found', and leaves a rate limit as a network failure", async () => {
+    await expect(verifyCircuit(node({ fail: "revert" }), DEPLOYMENT)).rejects.toMatchObject({ problem: "not-found" });
+    await expect(verifyCircuit(node({ fail: "empty" }), DEPLOYMENT)).rejects.toMatchObject({ problem: "not-found" });
+    const limited = await verifyCircuit(node({ fail: "rate-limit" }), DEPLOYMENT).catch((e: unknown) => e);
+    expect(limited).not.toBeInstanceOf(CircuitRefusedError);
+  });
+
+  it("uses the selectors xlayer/src/onchain.ts uses", () => {
+    expect(toFunctionSelector(CIRCUIT_ABI[1])).toBe(`0x${SELECTOR.netlist}`);
+    expect(toFunctionSelector(CIRCUIT_ABI[2])).toBe(`0x${SELECTOR.circuitInfo}`);
+  });
+});
+
+describe("the card's own mark of the server judgment", () => {
+  it("says the sample and the demo on the card", () => {
+    expect(serverMark(server)).toBe("server: recorded sample");
+    expect(serverMark(serverJudgmentFor(GIWA_SEPOLIA.id, GIWA_SEPOLIA.pool.address, { demoMismatch: true })!)).toBe("server judgment altered (demo)");
   });
 });
 
@@ -119,7 +178,7 @@ describe("judgeOnXLayer", () => {
     expect(toFunctionSelector(EVAL_ABI[0])).toBe(`0x${SELECTOR.eval}`);
   });
 
-  it("throws NotAJudgmentError when the answer's stage code is 5–7", async () => {
+  it("refuses an answer whose stage code is 5–7 as not a judgment", async () => {
     const transport = custom({
       async request({ method }: { method: string }) {
         if (method === "eth_blockNumber") return "0x10";
@@ -129,7 +188,7 @@ describe("judgeOnXLayer", () => {
       },
     });
     const client = createPublicClient({ chain: xLayer, transport }) as PublicClient;
-    await expect(judgeOnXLayer(client, DEPLOYMENT, server.input)).rejects.toBeInstanceOf(NotAJudgmentError);
+    await expect(judgeOnXLayer(client, DEPLOYMENT, server.input)).rejects.toMatchObject({ problem: "not-a-judgment" });
   });
 
   it("packs the input bits, reads the output bits back, and decodes the judgment", async () => {
