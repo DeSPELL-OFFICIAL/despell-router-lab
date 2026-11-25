@@ -16,7 +16,10 @@ const pct = (v: number) => {
 };
 const compactUsd = (v: number | null) =>
   v == null ? "-" : `$${new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(v)}`;
-const timeUtc = (iso: string) => `${new Date(iso).toISOString().slice(11, 19)} UTC`;
+const timeUtc = (iso: string) => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? "unknown time" : `${new Date(t).toISOString().slice(11, 19)} UTC`;
+};
 
 const BUY_OFF: Record<string, string> = {
   not_on_despell: "Not on DeSpell's verified token list, so DeSpell cannot buy it.",

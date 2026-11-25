@@ -147,3 +147,12 @@ test("a LI.FI API key, when given, travels only in its header", async () => {
   await createLifiQuoter({ fetch: none.fetch })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 });
   assert.equal(none.seen[0]!.headers["x-lifi-api-key"], undefined);
 });
+
+test("a numeric USD amount is read as a number", () => {
+  const body = lifiQuoteNvdax();
+  body.estimate!.gasCosts = [{ amountUSD: 0.5 }];
+  body.estimate!.feeCosts = [{ amountUSD: 0.25, included: true }];
+  const q = parseLifiQuote(body);
+  assert.equal(q.gasUsd, 0.5);
+  assert.equal(q.feeUsd, 0.25);
+});

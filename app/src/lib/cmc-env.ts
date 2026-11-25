@@ -23,10 +23,20 @@ export function lifiApiKey(): string | null {
   return process.env.LIFI_API_KEY?.trim() || null;
 }
 
-export type ConnectorTarget = { url: string; host: string; production: boolean };
+export type ConnectorTarget = { ok: true; url: string; host: string; production: boolean } | { ok: false; error: string };
 
+/**
+ * A malformed DESPELL_MCP_URL is reported, never replaced by the default:
+ * silently falling back to production would turn a test setup into real buys.
+ */
 export function despellConnectorTarget(): ConnectorTarget {
-  const url = process.env.DESPELL_MCP_URL?.trim() || DEFAULT_DESPELL_MCP_URL;
-  const host = new URL(url).host;
-  return { url, host, production: host === new URL(DEFAULT_DESPELL_MCP_URL).host };
+  const raw = process.env.DESPELL_MCP_URL?.trim() || DEFAULT_DESPELL_MCP_URL;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { ok: false, error: "DESPELL_MCP_URL is not a URL." };
+  }
+  if (u.protocol !== "https:") return { ok: false, error: "DESPELL_MCP_URL must be an https URL." };
+  return { ok: true, url: u.toString(), host: u.host, production: u.host === new URL(DEFAULT_DESPELL_MCP_URL).host };
 }

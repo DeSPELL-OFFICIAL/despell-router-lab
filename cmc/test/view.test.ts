@@ -142,3 +142,18 @@ test("rows whose buyability could not be checked cannot be bought", async () => 
   assert.deepEqual(screen.rows[0]!.badges, ["best"]);
   assert.ok(!screen.rows.some((r) => r.badges.includes("best_buyable")));
 });
+
+test("'most you can buy on DeSpell' never lands on a row the best rule would refuse", async () => {
+  const result = await compareWrappers({ cmc: cmc(), quoter: noDinari(quoter()), symbol: "NVDA" });
+  const ranked = result.rows.filter((r) => r.receivedValueUsd != null);
+  // Row 2 pays 1.8% below the stock, row 3 shows more than was spent; row 4 is fine.
+  ranked[1]!.premiumPct = -1.8;
+  ranked[2]!.receivedValueUsd = 100.4;
+  const buyable = new Map<string, Buyability>(
+    ranked.map((r, i) => [rowKey(r.wrapper.chainId, r.wrapper.address, r.wrapper.symbol), i === 0 ? { buyable: false, reason: "not_on_despell" } : { buyable: true }]),
+  );
+  const screen = buildWrapperScreen(result, buyable);
+  const marked = screen.rows.filter((r) => r.badges.includes("best_buyable"));
+  assert.equal(marked.length, 1);
+  assert.equal(marked[0]!.key, rowKey(ranked[3]!.wrapper.chainId, ranked[3]!.wrapper.address, ranked[3]!.wrapper.symbol));
+});

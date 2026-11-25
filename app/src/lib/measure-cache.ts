@@ -14,6 +14,8 @@
 
 export const COMPLETE_TTL_MS = 5 * 60_000;
 export const INCOMPLETE_TTL_MS = 60_000;
+/** A measurement still running after this is no longer shared; the next view starts its own. */
+export const IN_FLIGHT_TTL_MS = 60_000;
 
 type Entry<T> = { promise: Promise<T>; expiresAt: number };
 
@@ -25,8 +27,9 @@ export function createMeasureCache<T>(isComplete: (value: T) => boolean, now: ()
     if (entry && t < entry.expiresAt) return entry.promise;
 
     const promise = load();
-    // While loading, every caller shares this promise.
-    const current: Entry<T> = { promise, expiresAt: Number.POSITIVE_INFINITY };
+    // While loading, callers share this promise, but not forever: a hung
+    // request must not hold every later view.
+    const current: Entry<T> = { promise, expiresAt: t + IN_FLIGHT_TTL_MS };
     entry = current;
     try {
       const value = await promise;

@@ -26,6 +26,8 @@ export interface DespellConnectorOptions {
   /** Connector endpoint, for example https://app.despell.io/api/mcp. */
   url?: string;
   fetch?: typeof fetch;
+  /** Per-call timeout. Default 15 s. */
+  timeoutMs?: number;
 }
 
 export interface DespellConnector {
@@ -36,17 +38,24 @@ export interface DespellConnector {
 
 let nextId = 1;
 
-/** Pull the JSON-RPC message out of a JSON or server-sent-events body. */
-function readRpcBody(contentType: string, text: string): unknown {
-  if (contentType.includes("text/event-stream")) {
-    for (const line of text.split(/\r?\n/u)) {
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (data) return JSON.parse(data);
-    }
-    throw new DespellConnectorError("connector sent an empty event stream");
+/**
+ * Pull our JSON-RPC response out of a JSON or server-sent-events body. A
+ * stream may carry notifications before the response, and one event may
+ * span several data: lines, so events are joined and matched on the id.
+ */
+export function readRpcBody(contentType: string, text: string, id: number): unknown {
+  if (!contentType.includes("text/event-stream")) return JSON.parse(text);
+  for (const event of text.split(/\r?\n\r?\n/u)) {
+    const data = event
+      .split(/\r?\n/u)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).replace(/^ /u, ""))
+      .join("\n");
+    if (!data.trim()) continue;
+    const msg = JSON.parse(data) as { id?: unknown };
+    if (msg.id === id) return msg;
   }
-  return JSON.parse(text);
+  throw new DespellConnectorError("connector stream has no response for this request");
 }
 
 export function createDespellConnector(options: DespellConnectorOptions = {}): DespellConnector {
@@ -55,32 +64,37 @@ export function createDespellConnector(options: DespellConnectorOptions = {}): D
     throw new DespellConnectorError("connector URL must be https");
   }
   const doFetch = options.fetch ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 15_000;
 
   return {
     origin: endpoint.origin,
     async callTool(name, args) {
-      const body = { jsonrpc: "2.0", id: nextId++, method: "tools/call", params: { name, arguments: args } };
+      const id = nextId++;
+      const body = { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } };
       let res: Response;
+      let text: string;
       try {
         res = await doFetch(endpoint, {
           method: "POST",
           headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs),
         });
+        text = await res.text();
       } catch (err) {
         throw new DespellConnectorError(`connector unreachable: ${err instanceof Error ? err.message : String(err)}`);
       }
-      const text = await res.text();
       if (!res.ok) throw new DespellConnectorError(`connector HTTP ${res.status}`);
       let msg: { result?: { content?: { type?: string; text?: string }[]; isError?: boolean }; error?: { message?: string } };
       try {
-        msg = readRpcBody(res.headers.get("content-type") ?? "", text) as typeof msg;
+        msg = readRpcBody(res.headers.get("content-type") ?? "", text, id) as typeof msg;
       } catch (err) {
         if (err instanceof DespellConnectorError) throw err;
         throw new DespellConnectorError("connector sent unreadable JSON");
       }
       if (msg.error) throw new DespellConnectorError(`connector error: ${msg.error.message ?? "unknown"}`);
       const content = msg.result?.content?.find((c) => c.type === "text")?.text;
+      if (msg.result?.isError) throw new DespellConnectorError(`connector tool error: ${content ?? "unknown"}`);
       if (content == null) throw new DespellConnectorError("connector result has no text content");
       try {
         return JSON.parse(content);
@@ -205,6 +219,7 @@ export async function prepareWrapperBuy(connector: DespellConnector, req: Wrappe
     throw new DespellConnectorError("prepare_swap answered with a different trade than asked");
   }
   if (!result.url || !result.expiresAt) throw new DespellConnectorError("prepare_swap returned no link");
+  if (Number.isNaN(Date.parse(result.expiresAt))) throw new DespellConnectorError("prepare_swap returned an unreadable expiry");
 
   return {
     url: checkHandoffUrl(result.url, connector.origin),

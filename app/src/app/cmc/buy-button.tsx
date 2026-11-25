@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { prepareBuyLink, type BuyLinkState } from "./actions";
 
 type Props = {
@@ -12,10 +12,28 @@ type Props = {
   disabledReason?: string;
 };
 
-const timeUtc = (iso: string) => new Date(iso).toISOString().slice(11, 16);
+const timeUtc = (iso: string) => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? "unknown" : new Date(t).toISOString().slice(11, 16);
+};
+
+/** True once `expiresAt` has passed; re-renders at that moment. */
+function useExpired(expiresAt: string | null): boolean {
+  const [now, setNow] = useState(() => Date.now());
+  const at = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  useEffect(() => {
+    if (Number.isNaN(at)) return;
+    const wait = at - Date.now();
+    if (wait <= 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(wait + 250, 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [at]);
+  return !Number.isNaN(at) && now >= at;
+}
 
 export function BuyButton({ chainId, tokenAddress, symbol, primary, disabledReason }: Props) {
   const [state, action, pending] = useActionState<BuyLinkState, FormData>(prepareBuyLink, { status: "idle" });
+  const expired = useExpired(state.status === "ready" ? state.expiresAt : null);
 
   if (disabledReason) {
     return (
@@ -30,7 +48,7 @@ export function BuyButton({ chainId, tokenAddress, symbol, primary, disabledReas
     );
   }
 
-  if (state.status === "ready") {
+  if (state.status === "ready" && !expired) {
     return (
       <div className="cmc-buy is-ready" data-handoff="ready">
         <p className="cmc-buy-line">
@@ -53,6 +71,7 @@ export function BuyButton({ chainId, tokenAddress, symbol, primary, disabledReas
       <button type="submit" className={primary ? "ds-btn is-primary" : "ds-btn is-secondary"} disabled={pending}>
         {pending ? "Preparing link…" : `Buy ${symbol}`}
       </button>
+      {expired && <p className="cmc-buy-note">The last link expired. Press Buy for a new one.</p>}
       {state.status === "error" && (
         <p className="cmc-buy-note is-error" role="alert">
           {state.message}

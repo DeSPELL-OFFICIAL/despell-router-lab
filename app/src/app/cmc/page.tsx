@@ -9,17 +9,20 @@ import "./cmc.css";
 
 export const metadata: Metadata = { title: "CoinMarketCap API" };
 
-// One measurement is shared by page views: 5 minutes when complete, 1 minute when some quotes failed.
-const cache = createMeasureCache<WrapperScreen>((screen) => screen.incomplete === 0);
+// One measurement is shared by page views: 5 minutes when complete, 1 minute
+// when some quotes failed or DeSpell could not be asked about a row.
+const cache = createMeasureCache<WrapperScreen>(
+  (screen) => screen.incomplete === 0 && !screen.rows.some((r) => r.buy.kind === "disabled" && r.buy.reason === "check_failed"),
+);
 
-async function measure(apiKey: string): Promise<{ screen: WrapperScreen } | { error: string }> {
+async function measure(apiKey: string, connectorUrl: string): Promise<{ screen: WrapperScreen } | { error: string }> {
   try {
     const lifiKey = lifiApiKey();
     const screen = await cache(() =>
       loadWrapperScreen({
         cmc: createCmcClient({ apiKey }),
         quoter: createLifiQuoter(lifiKey ? { apiKey: lifiKey } : {}),
-        connector: createDespellConnector({ url: despellConnectorTarget().url }),
+        connector: createDespellConnector({ url: connectorUrl }),
         symbol: CMC_SYMBOL,
         spendUsd: CMC_SPEND_USD,
       }),
@@ -37,7 +40,7 @@ export default async function Page() {
   const c = getContest("cmc");
   const apiKey = cmcApiKey();
   const target = despellConnectorTarget();
-  const measured = apiKey ? await measure(apiKey) : null;
+  const measured = !apiKey ? null : target.ok ? await measure(apiKey, target.url) : { error: target.error };
 
   return (
     <main className="lab-main lab-narrow cmc-main">
@@ -69,7 +72,9 @@ export default async function Page() {
           </div>
         </div>
       )}
-      {measured && "screen" in measured && <WrapperList screen={measured.screen} connectorHost={target.host} production={target.production} />}
+      {measured && "screen" in measured && target.ok && (
+        <WrapperList screen={measured.screen} connectorHost={target.host} production={target.production} />
+      )}
     </main>
   );
 }

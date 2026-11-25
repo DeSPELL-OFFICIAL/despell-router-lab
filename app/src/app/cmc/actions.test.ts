@@ -104,3 +104,15 @@ describe("prepareBuyLink", () => {
     expect(state).toMatchObject({ status: "ready", host: "test.despell.io" });
   });
 });
+
+describe("prepareBuyLink with a bad DESPELL_MCP_URL", () => {
+  it("says buying is not set up, and never falls back to production", async () => {
+    vi.stubGlobal("fetch", connectorEcho());
+    for (const bad of ["test.despell.io/api/mcp", "http://test.despell.io/api/mcp"]) {
+      vi.stubEnv("DESPELL_MCP_URL", bad);
+      const state = await prepareBuyLink({ status: "idle" }, form({ chainId: "8453", tokenAddress: NVDAC }));
+      expect(state).toEqual({ status: "error", message: "Buying is not set up on this server." });
+    }
+    expect(calls).toHaveLength(0);
+  });
+});

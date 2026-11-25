@@ -116,3 +116,34 @@ test("handoff links must stay on the connector's own site", () => {
   assert.throws(() => checkHandoffUrl("https://app.despell.io/?handoff=short", origin));
   assert.throws(() => checkHandoffUrl("https://app.despell.io/?handoff=abcdEFGH1234_-xyz#x", origin));
 });
+
+test("a stream with a notification first, and a response split over data lines, is read by id", async () => {
+  const { readRpcBody } = await import("../src/despell.ts");
+  const response = { jsonrpc: "2.0", id: 7, result: { content: [{ type: "text", text: '{"ok":true}' }] } };
+  const json = JSON.stringify(response, null, 1).split("\n");
+  const stream = [
+    'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}}',
+    `event: message\n${json.map((l) => `data: ${l}`).join("\n")}`,
+    "",
+  ].join("\n\n");
+  assert.deepEqual(readRpcBody("text/event-stream", stream, 7), response);
+  assert.throws(() => readRpcBody("text/event-stream", stream, 8), /no response for this request/);
+});
+
+test("a tool error is an error, not a result", async () => {
+  const f = (async (_i: string | URL | Request, init?: RequestInit) => {
+    const { id } = JSON.parse(String(init?.body)) as { id: number };
+    const msg = { jsonrpc: "2.0", id, result: { isError: true, content: [{ type: "text", text: "Invalid arguments" }] } };
+    return new Response(`data: ${JSON.stringify(msg)}\n\n`, { headers: { "content-type": "text/event-stream" } });
+  }) as typeof fetch;
+  const connector = createDespellConnector({ fetch: f });
+  await assert.rejects(connector.callTool("find_token", {}), /tool error: Invalid arguments/);
+  assert.equal(((await checkBuyable(connector, 8453, NVDAC)) as { reason: string }).reason, "check_failed");
+});
+
+test("a link with an unreadable expiry is refused", async () => {
+  const r = prepareSwapNvdac();
+  r.expiresAt = "in 15 minutes";
+  const { connector } = connectorWith(() => r);
+  await assert.rejects(prepareWrapperBuy(connector, { chainId: 8453, tokenAddress: NVDAC, amount: "100" }), /expiry/);
+});

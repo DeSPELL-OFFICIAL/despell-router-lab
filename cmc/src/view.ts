@@ -11,7 +11,7 @@
 
 import type { Buyability } from "./despell.ts";
 import type { CompareResult } from "./compare.ts";
-import type { BestBlocked, RankedWrapper, Unavailable } from "./rank.ts";
+import { BEST_MAX_DISCOUNT_PCT, type BestBlocked, type RankedWrapper, type Unavailable } from "./rank.ts";
 
 export type Badge = "best" | "best_buyable" | "tied";
 
@@ -80,13 +80,14 @@ export function buildWrapperScreen(result: CompareResult, buyability: ReadonlyMa
 
   for (const r of result.rows) {
     const w = r.wrapper;
-    if (!isRanked(r) || w.chainId == null || w.address == null || w.chainName == null) {
+    // A ranked row always has a chain and an address (it was quoted there).
+    if (!isRanked(r) || w.chainId == null || w.address == null) {
       folded.push({
         key: rowKey(w.chainId, w.address, w.symbol),
         symbol: w.symbol,
         issuer: w.issuer,
         chainName: w.chainName,
-        reason: r.unavailable ?? "no_route",
+        reason: r.unavailable ?? "no_contract",
         ...(r.unavailableDetail ? { detail: r.unavailableDetail } : {}),
       });
       continue;
@@ -99,7 +100,7 @@ export function buildWrapperScreen(result: CompareResult, buyability: ReadonlyMa
       key,
       symbol: w.symbol,
       issuer: w.issuer,
-      chainName: w.chainName,
+      chainName: w.chainName ?? `chain ${w.chainId}`,
       chainId: w.chainId,
       address: w.address,
       cmcPriceUsd: w.cmcPriceUsd,
@@ -120,7 +121,16 @@ export function buildWrapperScreen(result: CompareResult, buyability: ReadonlyMa
   if (!best) {
     noBest = rows.length === 0 ? "nothing_ranked" : result.incomplete > 0 ? "incomplete" : "all_blocked";
   } else if (best.buy.kind !== "enabled") {
-    const fallback = rows.find((r) => r !== best && r.bestBlocked == null && r.buy.kind === "enabled");
+    // The same tests the best had to pass. rankWrappers only marks rows
+    // above the best, so rows below it are checked here.
+    const fallback = rows.find(
+      (r) =>
+        r !== best &&
+        r.bestBlocked == null &&
+        r.premiumPct >= -BEST_MAX_DISCOUNT_PCT &&
+        r.receivedUsd <= result.spendUsd &&
+        r.buy.kind === "enabled",
+    );
     if (fallback) fallback.badges.unshift("best_buyable");
   }
 

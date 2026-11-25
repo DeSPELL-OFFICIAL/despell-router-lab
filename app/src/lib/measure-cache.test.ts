@@ -44,3 +44,19 @@ describe("measure cache", () => {
     expect((await s.cache(s.load())).n).toBe(1);
   });
 });
+
+describe("measure cache in flight", () => {
+  it("stops sharing a measurement that has run past its deadline", async () => {
+    let t = 0;
+    const cache = createMeasureCache<{ n: number }>(() => true, () => t);
+    const hung = cache(() => new Promise(() => {}));
+    void hung;
+    t += 59_999;
+    let started = 0;
+    const shared = cache(async () => ({ n: ++started }));
+    void shared;
+    expect(started).toBe(0); // still sharing the hung one
+    t += 1;
+    expect((await cache(async () => ({ n: ++started }))).n).toBe(1);
+  });
+});

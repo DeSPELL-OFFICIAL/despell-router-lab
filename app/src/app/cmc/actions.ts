@@ -41,6 +41,7 @@ export async function prepareBuyLink(_prev: BuyLinkState, form: FormData): Promi
   }
 
   const target = despellConnectorTarget();
+  if (!target.ok) return { status: "error", message: "Buying is not set up on this server." };
   try {
     const link = await prepareWrapperBuy(createDespellConnector({ url: target.url }), {
       chainId,
