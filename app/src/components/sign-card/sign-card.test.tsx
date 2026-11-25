@@ -101,4 +101,13 @@ describe("SignCard", () => {
     expect(html).toContain("Base Sepolia");
     expect(html).toContain("GIWA Sepolia");
   });
+
+  it("shows a contest's line inside the check box, closed or open, without making it a details toggle", () => {
+    const line = <span data-line="circuit">Pool judgment circuit #7 · same judgment</span>;
+    const plain = renderToStaticMarkup(<SignCard {...EMPTY_SWAP} check={{ tone: "plain", title: "Connect a wallet", line }} />);
+    expect(plain).toMatch(/<div class="ds-sum is-plain" data-row="check"><div class="ds-sum-head">.*<span class="ds-sum-line" data-row="check-line"><span data-line="circuit">Pool judgment circuit #7 · same judgment<\/span><\/span>/u);
+    const open = renderToStaticMarkup(<SignCard {...READY} check={{ ...READY.check!, line }} />);
+    // In the <summary>, so it shows while the box is closed.
+    expect(open).toMatch(/<summary class="ds-sum-head">.*data-row="check-line".*<\/summary>/u);
+  });
 });

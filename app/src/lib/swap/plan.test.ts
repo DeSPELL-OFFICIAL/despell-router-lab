@@ -182,6 +182,15 @@ describe.each([
     expect(canSign({ ...v, sign: { simulation: v.simulation, busy: v.busy, onSign: () => {} } })).toBe(false);
   });
 
+  it("keeps showing a sent, unconfirmed transaction even when a contest holds the card", () => {
+    const hold = { state: "hold" as const, title: "Judgment differs from the circuit" };
+    const unconfirmed = cardView({ ...stateFor(chain, plan), gate: hold, phase: { kind: "unconfirmed", step: 0, total: plan.steps.length, hash: `0x${"cd".repeat(32)}`, nonce: 3 } });
+    expect(unconfirmed.check.title).toBe("Sent, not confirmed yet");
+    const done = cardView({ ...stateFor(chain, plan), gate: hold, phase: { kind: "done", hash: `0x${"cd".repeat(32)}`, received: 1n, block: 9n } });
+    expect(done.check.title).toBe("Signed and confirmed");
+    expect(cardView({ ...stateFor(chain, plan), gate: hold }).check.title).toBe("Judgment differs from the circuit");
+  });
+
   it("names what stays approved when signing stops after the approvals", () => {
     const lines = confirmedApprovals(chain, plan, plan.steps.length - 1);
     expect(lines).toHaveLength(signed.approvals.length);
