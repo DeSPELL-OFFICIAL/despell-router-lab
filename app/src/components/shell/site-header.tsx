@@ -10,6 +10,7 @@ export function SiteHeader() {
         DeSpell <span className="lab-brand-sub">Router Lab</span>
       </Link>
       <nav aria-label="Hackathons" className="lab-nav">
+        <Link href="/swap">Test swap</Link>
         {CONTESTS.map((c) => (
           <Link key={c.slug} href={`/${c.slug}`}>
             {c.hackathon}

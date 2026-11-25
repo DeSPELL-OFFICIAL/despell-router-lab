@@ -76,7 +76,9 @@ jobs:
       - name: Cache reactive dependencies
         uses: actions/cache@v4
         with:
-          path: reactive/lib
+          path: |
+            reactive/lib
+            reactive/reflex/lib
           key: reactive-lib-${{ hashFiles('reactive/scripts/install-deps.sh') }}
       - name: reactive · dependencies (pinned in install-deps.sh)
         run: reactive/scripts/install-deps.sh
@@ -87,6 +89,14 @@ jobs:
       - name: reactive · forge test
         working-directory: reactive
         run: forge test
+      - name: reactive/reflex · forge fmt
+        working-directory: reactive/reflex
+        run: forge fmt --check src script test test-fork
+      - name: reactive/reflex · forge test
+        working-directory: reactive/reflex
+        run: forge test
+      - name: reactive/reflex · report script tests
+        run: node --test reactive/reflex/scripts/*.test.mjs
 
       - name: Cache xlayer contract dependencies
         uses: actions/cache@v4

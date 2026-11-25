@@ -20,6 +20,16 @@ The DeSpell app itself is an existing private product. This repository holds onl
 - Marks only tighten. A pool is reopened only after test trades pass again, never because the pool flipped its setting back.
 - No keys, API keys or seed phrases in this repository.
 
+## The test-network swap card (`/swap`)
+
+The shared card, live on two test networks: 10 USDC to ETH on Base Sepolia (Uniswap v4, the `reactive/` test pool, through the Universal Router and Permit2) and on GIWA Sepolia (Uniswap v3 SwapRouter02, WETH/USDC Mock).
+
+- Browser wallets only (EIP-6963 and `window.ethereum`); no WalletConnect.
+- Everything the card says about a transaction (amount sent, minimum received, recipient, each approval's spender, amount and expiry) is decoded from the bytes the wallet will sign (`app/src/lib/swap/decode.ts`). Approvals cover this swap's amount only.
+- The sign button turns on only after those exact transactions pass a simulation (`eth_simulateV1`) and the page's own check is open. Each contest page passes that check as a gate: `pending` while it runs, `hold` to stop, `ok` to allow.
+- A transaction the wallet sent but whose receipt could not be read keeps the card locked until its receipt is read again; a transaction replaced or cancelled in the wallet stops the card.
+- Test USDC: on Base Sepolia from Circle's faucet. On GIWA Sepolia the USDC is a mock token anyone can mint, and the card offers that mint from your wallet. The mint is outside the signing card: it sends `mint(your address, 10 USDC)` to the mock token with value 0 and costs gas only.
+
 ## Run it
 
 Node 24 and pnpm 10.

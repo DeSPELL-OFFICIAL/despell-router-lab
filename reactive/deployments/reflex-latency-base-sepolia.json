@@ -1,0 +1,338 @@
+{
+  "measuredAt": "2026-11-25T18:46:11.285Z",
+  "origin": {
+    "chain": "Base Sepolia",
+    "chainId": 84532,
+    "hook": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000",
+    "poolId": "0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4"
+  },
+  "reactive": {
+    "chain": "Reactive Lasna",
+    "chainId": 5318007,
+    "poolReflex": "0x321db6a8b9eb320c761a8f801fe4757e60f2484a"
+  },
+  "destination": {
+    "chain": "Base Sepolia",
+    "chainId": 84532,
+    "poolGuard": "0xcf269776640d3d19c9c515f3eeaf1dad53d88378"
+  },
+  "method": "seconds = PoolGuard mark block timestamp - fee change block timestamp (whole seconds); blocks = block gap on Base Sepolia (about 0.2 s each)",
+  "summary": {
+    "runs": 14,
+    "marked": 14,
+    "medianSeconds": 1,
+    "medianBlocks": 6.5,
+    "minSeconds": 1,
+    "maxSeconds": 2
+  },
+  "runs": [
+    {
+      "run": 1,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0x29ade9215a7047a55b12ef0dc95be6e9e3460c4da2ccc24580c159a414bdb918",
+      "feeBlock": 63550425,
+      "feeTime": 1795631953,
+      "lasnaFrom": 9237543,
+      "result": "marked",
+      "markTx": "0xc543b11fa9b2a632d4fe88d5d3764f8056d694a65e0ee02e4bff9aa51330b65c",
+      "markBlock": 63550430,
+      "markTime": 1795631954,
+      "blocks": 5,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x62d7f9b24a8b7fe73bc616dba6a21b3732e00834745e2f29fe4669d3e8095da5",
+        "block": 9237577,
+        "time": 1795631953
+      },
+      "reopenTx": "0x56d1219b79be98a3db4f2f1e1002dd2ea5febbf457b7a154ac5315311704d7da",
+      "reopenBlock": 63550501
+    },
+    {
+      "run": 2,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0x8f8bdaff843bf37b873a26b7882cdd7ecb0d6925342e90eff9e74169d043f222",
+      "feeBlock": 63550578,
+      "feeTime": 1795631984,
+      "lasnaFrom": 9237573,
+      "result": "marked",
+      "markTx": "0xa3a11a91c295ce13d70f636c6082f255de4228afd83d031f05dcc8be55de47f6",
+      "markBlock": 63550586,
+      "markTime": 1795631986,
+      "blocks": 8,
+      "seconds": 2,
+      "reactive": {
+        "tx": "0x585a2868c9c0a0ec2082451228d0badd8c82ef070cab90381fbbbbfb98214878",
+        "block": 9237605,
+        "time": 1795631984
+      },
+      "reopenTx": "0xf529b061e671439c8fa2ac66fe49e66b19afc6b97822e161e39e5b8aa9f0e06c",
+      "reopenBlock": 63550664
+    },
+    {
+      "run": 3,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0xec5c555db3bd06fda4f7b89adf2b20665da5175117d3a540a95cb5e17d083ef4",
+      "feeBlock": 63550743,
+      "feeTime": 1795632017,
+      "lasnaFrom": 9237603,
+      "result": "marked",
+      "markTx": "0x5a8d0eb87fd90174d5fa7869ed2b6b175414bab90c2f541d51a89120fd599ced",
+      "markBlock": 63550747,
+      "markTime": 1795632018,
+      "blocks": 4,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x04930bbeadace95207d40283c5e97d23a0328ed959820a2803d801c036c41687",
+        "block": 9237634,
+        "time": 1795632016
+      },
+      "reopenTx": "0xfa4cb3d128f43bfa505f90ca25596f912ee7aa08ab6a06e10384ec2cd1a000f5",
+      "reopenBlock": 63550841
+    },
+    {
+      "run": 4,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0x6c0af474299a3407100630e57600feaaf2dcd93a71989a657f9854afcfc0c7e9",
+      "feeBlock": 63550941,
+      "feeTime": 1795632057,
+      "lasnaFrom": 9237635,
+      "result": "marked",
+      "markTx": "0x3371a5aa6fc28b58a1960799df2437e8027692f4691b4517fc716364421c7580",
+      "markBlock": 63550947,
+      "markTime": 1795632058,
+      "blocks": 6,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x729809ecc1a9b376e8554d14577d2f8deafee6400bb0404a37b99eae4076e84e",
+        "block": 9237671,
+        "time": 1795632056
+      },
+      "reopenTx": "0xcbace81c358c5c17f4a600faf916dab00985146df2b14ea64587d0075be46e0e",
+      "reopenBlock": 63551020
+    },
+    {
+      "run": 5,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0xcc07574ca82562ad63949080df99cf427cb82e69a7ae91f4951f941212ff5a74",
+      "feeBlock": 63551105,
+      "feeTime": 1795632089,
+      "lasnaFrom": 9237667,
+      "result": "marked",
+      "markTx": "0x9465492c9e114e353a741b11556b9edffa2639a4990af5123a4a5aabd1418a34",
+      "markBlock": 63551110,
+      "markTime": 1795632090,
+      "blocks": 5,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x08f1f455f02414e1ea6e2f5ffaa0599872ba2ad78581e3b05ff488c0abec00db",
+        "block": 9237700,
+        "time": 1795632088
+      },
+      "reopenTx": "0x4b6e506041a0c7bc1c05cece0f53885a19c60021b055e3f65fed6ed6609fdb12",
+      "reopenBlock": 63551169
+    },
+    {
+      "run": 6,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0xeb4724b3f5179c42b512c0ef453327e8a388df44b08ce87d0c694ca17f61b22e",
+      "feeBlock": 63551232,
+      "feeTime": 1795632115,
+      "lasnaFrom": 9237694,
+      "result": "marked",
+      "markTx": "0x4624dc0ad0f0e7ac95e42dee307bbda6cfb907a605683a3ab550f0d359178990",
+      "markBlock": 63551240,
+      "markTime": 1795632116,
+      "blocks": 8,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0xd4ad5e32a990f2c14269f680f11f069ea0ed4a4696c1da6b72cbce5dc19d3858",
+        "block": 9237723,
+        "time": 1795632114
+      },
+      "reopenTx": "0x8ee8ccedc293fc9287b4561dc25b8e20d0aa2ae6551c70bee4f2bd0940dee9bb",
+      "reopenBlock": 63551304
+    },
+    {
+      "run": 7,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0xe8548b29ba35d8334f36f4569eb807a24a86629b1b39d9c5d94c70f874ac9883",
+      "feeBlock": 63551371,
+      "feeTime": 1795632143,
+      "lasnaFrom": 9237719,
+      "result": "marked",
+      "markTx": "0x4efabf75223bc382fc16b85e4e0fd065fdd77e80956280051b5b5cfc887e1c4f",
+      "markBlock": 63551376,
+      "markTime": 1795632144,
+      "blocks": 5,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x1dfda010401913307ca3b20c90fa1f059d2212f7b8cd5993d096f0f0ed495842",
+        "block": 9237748,
+        "time": 1795632142
+      },
+      "reopenTx": "0x21d72a03d211b6c2643e9382e58f15df579ffe4420812ead7bbc2b780e829e8d",
+      "reopenBlock": 63551444
+    },
+    {
+      "run": 8,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0xb30cba20b995bd227061689f2b0786ea958b77dceba08d9edf90b0c51cca1595",
+      "feeBlock": 63551509,
+      "feeTime": 1795632170,
+      "lasnaFrom": 9237743,
+      "result": "marked",
+      "markTx": "0x610be8baca1ab379d8780d421500e9df3bb216cb49bcae72ec0ba37ddec22c75",
+      "markBlock": 63551516,
+      "markTime": 1795632172,
+      "blocks": 7,
+      "seconds": 2,
+      "reactive": {
+        "tx": "0x123f5ea88bac896fa8d8bb0a835bad08e5fd2a12c998a501696939662e99a8ca",
+        "block": 9237772,
+        "time": 1795632170
+      },
+      "reopenTx": "0xaf1cf4f7a85ec469425cb09b3025c33aa28a555e6b704463ec7464310b957196",
+      "reopenBlock": 63551583
+    },
+    {
+      "run": 9,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0xc4431a1abfc2a9f312d43b2ab7b877501a93068ae41c23f8b1e89a5a0b1174e5",
+      "feeBlock": 63551645,
+      "feeTime": 1795632197,
+      "lasnaFrom": 9237767,
+      "result": "marked",
+      "markTx": "0x8ebd81dd6d5cc63acf2b033b3db8cbb8b1164a746a787578cb1f228d2583084e",
+      "markBlock": 63551649,
+      "markTime": 1795632198,
+      "blocks": 4,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x59a9c40c9c359ef4595d701423153026fafda0f084bbeaf8ca72d85457ffe81a",
+        "block": 9237795,
+        "time": 1795632196
+      },
+      "reopenTx": "0xcb9aa4b9b82db492d8fa79a358000aa7cb55e45831473525a23ff215729672b3",
+      "reopenBlock": 63551737
+    },
+    {
+      "run": 10,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0x7b12fa4ddc76e5b21ef83413ddc72c776272a1f14cb751625660b370ab075a58",
+      "feeBlock": 63551804,
+      "feeTime": 1795632229,
+      "lasnaFrom": 9237794,
+      "result": "marked",
+      "markTx": "0x317cff406458dbd7e56068e11dbf0e5fdea82d1ee7dfa4bea12280372ef9a243",
+      "markBlock": 63551812,
+      "markTime": 1795632231,
+      "blocks": 8,
+      "seconds": 2,
+      "reactive": {
+        "tx": "0xbfdaab2cf68bea2280b06cd17a082c6fef25f86ea3f87314082eca13b3bbcef1",
+        "block": 9237824,
+        "time": 1795632229
+      },
+      "reopenTx": "0x4460d6bc84119aed9d21d105f5d8de2d98a7e1c406c3b952b680943786040b9b",
+      "reopenBlock": 63551868
+    },
+    {
+      "run": 11,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0x37c45c922695e0d9cc58b458449b58f682a02877fa0b4328d81b0eea59cdcc57",
+      "feeBlock": 63551954,
+      "feeTime": 1795632259,
+      "lasnaFrom": 9237817,
+      "result": "marked",
+      "markTx": "0xe35bc03edfbf3cb87083b1ccacccc8f11211edef2e342783ad6d9bfb6e68b25b",
+      "markBlock": 63551961,
+      "markTime": 1795632261,
+      "blocks": 7,
+      "seconds": 2,
+      "reactive": {
+        "tx": "0xb28035cedbeab7ff204b4137c23a9bc3701d88f582a8094821d2efe2ad941daf",
+        "block": 9237850,
+        "time": 1795632259
+      },
+      "reopenTx": "0x7c60b1ff8ad955078647c8ab1fc67ca7c645c8e46bf03133135ae1b25dfbbaf6",
+      "reopenBlock": 63552028
+    },
+    {
+      "run": 12,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0xb707e7b422695f98e543e2a7f5cc5cefa6908c86372ebb7d11a427158227ed65",
+      "feeBlock": 63552101,
+      "feeTime": 1795632289,
+      "lasnaFrom": 9237845,
+      "result": "marked",
+      "markTx": "0x16849041b69416aedf9047c2c0d4f8502d7914622f63416e992b56041b6ba444",
+      "markBlock": 63552106,
+      "markTime": 1795632290,
+      "blocks": 5,
+      "seconds": 1,
+      "reactive": {
+        "tx": "0x6ee1709131f9ef1bb35557abeeeff47bf9bd6beb06fb91c2e03ede4ab7ec13b2",
+        "block": 9237876,
+        "time": 1795632288
+      },
+      "reopenTx": "0x674b35b195805d1ad3fc84c1cef4481179ea16ee1678b49e7bd731c6539d65b5",
+      "reopenBlock": 63552180
+    },
+    {
+      "run": 13,
+      "oldFee": 500,
+      "newFee": 100000,
+      "feeTx": "0x6098230fd4042a9f27879ed52cf07e7719a8a33835817f4f1c10f0b208f3592b",
+      "feeBlock": 63552268,
+      "feeTime": 1795632322,
+      "lasnaFrom": 9237874,
+      "result": "marked",
+      "markTx": "0x5afcca2de153e1f73354d4680a91e2381771c04cc01e004c722899a0c94c9e54",
+      "markBlock": 63552276,
+      "markTime": 1795632324,
+      "blocks": 8,
+      "seconds": 2,
+      "reactive": {
+        "tx": "0xf8a3363c5d79fb8fdbeb444f726e3ebbfeb9d241e5a4c4c0466ce20ff829d73a",
+        "block": 9237907,
+        "time": 1795632322
+      },
+      "reopenTx": "0x071b0a8b4255f922a4f7ad9db32099e61c47e1412899892b60e8c1e01d6f79cf",
+      "reopenBlock": 63552341
+    },
+    {
+      "run": 14,
+      "oldFee": 100000,
+      "newFee": 500,
+      "feeTx": "0xfe8105fad2e14f7fe788dda6caff735ddaf485e4681ec75f4b15b78a38779f88",
+      "feeBlock": 63552417,
+      "feeTime": 1795632352,
+      "lasnaFrom": 9237903,
+      "result": "marked",
+      "markTx": "0x3665bb1635edd89ff9b06de450e0ce2f87a3c5518b1713ad0d99560473a4cd68",
+      "markBlock": 63552427,
+      "markTime": 1795632354,
+      "blocks": 10,
+      "seconds": 2,
+      "reactive": {
+        "tx": "0xb59c4c9d4d6bf24edaffb45fdcac9676c1c26c425f7a29e8244e6672a05ee7f5",
+        "block": 9237935,
+        "time": 1795632352
+      },
+      "reopenTx": "0x60962601f8cb2134927522a585a8b359aa0c6dcb7677ab305bcae6ef440446bf",
+      "reopenBlock": 63552496
+    }
+  ]
+}
