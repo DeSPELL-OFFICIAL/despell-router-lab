@@ -1,0 +1,23 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+# The scripts read the netlist and its samples from ../circuit, and a swap quote from ./quote (not committed).
+fs_permissions = [{ access = "read", path = "../circuit" }, { access = "read", path = "./quote" }]
+
+[rpc_endpoints]
+xlayer = "https://rpc.xlayer.tech"
+
+[lint]
+lint_on_build = false
+
+# Fork tests run the real tape-out against X Layer mainnet state (public RPC, nothing is sent). They need the
+# network, so they are not part of the default `forge test`. Run: FOUNDRY_PROFILE=fork forge test
+[profile.fork]
+test = "test-fork"

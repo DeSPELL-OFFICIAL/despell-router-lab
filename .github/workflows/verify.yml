@@ -87,3 +87,18 @@ jobs:
       - name: reactive · forge test
         working-directory: reactive
         run: forge test
+
+      - name: Cache xlayer contract dependencies
+        uses: actions/cache@v4
+        with:
+          path: xlayer/contracts/lib
+          key: xlayer-contracts-lib-${{ hashFiles('xlayer/contracts/scripts/install-deps.sh') }}
+      - name: xlayer · dependencies (pinned in install-deps.sh)
+        run: xlayer/contracts/scripts/install-deps.sh
+      - name: xlayer · forge fmt
+        working-directory: xlayer/contracts
+        run: forge fmt --check src script test test-fork
+      # Unit tests only. The fork tests (FOUNDRY_PROFILE=fork) need a live X Layer RPC.
+      - name: xlayer · forge test
+        working-directory: xlayer/contracts
+        run: forge test

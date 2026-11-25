@@ -1,12 +1,13 @@
 // Builds the pool judgment circuit from the rules, checks it on every input vector, and writes the netlist that
-// DES-699 tapes out: xlayer/circuit/pool-judgment.json.
+// DES-699 tapes out (xlayer/circuit/pool-judgment.json) and the sample vectors it checks eval with
+// (xlayer/circuit/pool-judgment-samples.json).
 //
 //   node scripts/build-circuit.ts          write the file
-//   node scripts/build-circuit.ts --check  fail if the file is missing or differs from a fresh build
+//   node scripts/build-circuit.ts --check  fail if a file is missing or differs from a fresh build
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ARTIFACT_URL, artifactText } from "../src/artifact.ts";
+import { ARTIFACT_URL, artifactText, SAMPLES_URL, samplesText } from "../src/artifact.ts";
 import { INPUT_COUNT, OUTPUT_COUNT } from "../src/bits.ts";
 import { buildJudgmentCircuit } from "../src/circuit.ts";
 import { formatOkb, tapeoutCost } from "../src/cost.ts";
@@ -14,22 +15,25 @@ import { compareAll } from "../src/exhaustive-parallel.ts";
 import { encodeNetlist } from "../src/netlist.ts";
 
 const OUT_FILE = fileURLToPath(ARTIFACT_URL);
+const SAMPLES_FILE = fileURLToPath(SAMPLES_URL);
 
 const netlist = buildJudgmentCircuit();
 const text = artifactText(netlist);
+const samples = samplesText();
 
 if (process.argv.includes("--check")) {
-  let current = "";
-  try {
-    current = readFileSync(OUT_FILE, "utf8");
-  } catch {
-    // missing file: reported below
-  }
-  if (current !== text) {
-    console.error("circuit/pool-judgment.json is out of date: run `pnpm build:circuit` in xlayer/");
+  const read = (file: string) => {
+    try {
+      return readFileSync(file, "utf8");
+    } catch {
+      return ""; // missing file: reported below
+    }
+  };
+  if (read(OUT_FILE) !== text || read(SAMPLES_FILE) !== samples) {
+    console.error("circuit/ is out of date: run `pnpm build:circuit` in xlayer/");
     process.exit(1);
   }
-  console.log(`circuit/pool-judgment.json is up to date (${netlist.gates.length} NAND)`);
+  console.log(`circuit/ is up to date (${netlist.gates.length} NAND)`);
   process.exit(0);
 }
 
@@ -49,4 +53,5 @@ if (result.mismatches !== 0) {
   process.exit(1);
 }
 writeFileSync(OUT_FILE, text);
-console.log(`wrote ${OUT_FILE}`);
+writeFileSync(SAMPLES_FILE, samples);
+console.log(`wrote ${OUT_FILE} and ${SAMPLES_FILE}`);
