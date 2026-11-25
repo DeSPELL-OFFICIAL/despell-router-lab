@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/shell/site-header";
 import { themeScript } from "@/components/shell/theme-script";
+import { WalletProviders } from "@/components/wallet/providers";
 import "@/styles/tokens.css";
 import "@/styles/ds.css";
 import "./globals.css";
@@ -22,8 +23,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <SiteHeader />
-        {children}
+        <WalletProviders>
+          <SiteHeader />
+          {children}
+        </WalletProviders>
       </body>
     </html>
   );

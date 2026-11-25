@@ -19,6 +19,9 @@ export default function Home() {
             <li>Money moves only when you sign.</li>
             <li>Marks only tighten. A pool reopens only after test trades pass again.</li>
             <li>
+              <Link href="/swap">Sign a test-network swap with your own wallet</Link>
+            </li>
+            <li>
               <Link href="/card">See the card in both themes</Link>
             </li>
           </ul>
