@@ -117,3 +117,23 @@ test("a 429 is retried once, after the Retry-After wait (capped)", async () => {
   assert.equal(calls, 2, "only one retry");
   assert.deepEqual(waits, [5000], "wait is capped");
 });
+
+test("a blank USD amount is incomplete, not free", () => {
+  const gas = lifiQuoteNvdax();
+  gas.estimate!.gasCosts = [{ amountUSD: " " }];
+  assert.throws(() => parseLifiQuote(gas), QuoteIncompleteError);
+  const fee = lifiQuoteNvdax();
+  fee.estimate!.feeCosts = [{ amountUSD: "  ", included: true }];
+  assert.throws(() => parseLifiQuote(fee), QuoteIncompleteError);
+});
+
+test("a 429 without Retry-After waits the default second before retrying", async () => {
+  let calls = 0;
+  const waits: number[] = [];
+  const noHeader = (async () => {
+    calls++;
+    return calls === 1 ? new Response("{}", { status: 429 }) : new Response(JSON.stringify(lifiQuoteNvdax()), { status: 200 });
+  }) as typeof fetch;
+  await createLifiQuoter({ fetch: noHeader, sleep: async (ms) => void waits.push(ms) })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 });
+  assert.deepEqual(waits, [1000]);
+});

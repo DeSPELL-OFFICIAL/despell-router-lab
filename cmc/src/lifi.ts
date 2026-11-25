@@ -82,8 +82,10 @@ export interface LifiQuoteResponse {
 
 /** A cost's USD amount, or null when it is missing, not a number, or negative. */
 const usdOf = (c: LifiCost): number | null => {
-  if (c.amountUSD == null || c.amountUSD === "") return null;
-  const v = Number(c.amountUSD);
+  // Number(" ") is 0, so blank strings must be caught before converting.
+  const raw = c.amountUSD?.trim();
+  if (!raw) return null;
+  const v = Number(raw);
   return Number.isFinite(v) && v >= 0 ? v : null;
 };
 
@@ -130,8 +132,10 @@ const MAX_RETRY_WAIT_MS = 5_000;
 const DEFAULT_RETRY_WAIT_MS = 1_000;
 
 function retryWaitMs(res: Response): number {
-  const header = Number(res.headers.get("retry-after"));
-  return Number.isFinite(header) && header >= 0 ? Math.min(header * 1000, MAX_RETRY_WAIT_MS) : DEFAULT_RETRY_WAIT_MS;
+  // A missing or blank header would read as Number(null) = 0 and retry at once.
+  const raw = res.headers.get("retry-after")?.trim();
+  const seconds = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.min(seconds * 1000, MAX_RETRY_WAIT_MS) : DEFAULT_RETRY_WAIT_MS;
 }
 
 export function createLifiQuoter(
