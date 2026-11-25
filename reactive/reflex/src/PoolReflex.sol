@@ -10,7 +10,7 @@ import {PoolGuard} from "./PoolGuard.sol";
 /// @notice The DeSpell router's reflex as a Reactive contract. It listens to the test pool hook's `FeeUpdated` on
 ///         the origin chain and, without waiting for any AI review, asks PoolGuard on the destination chain to mark
 ///         the pool. It can only ask PoolGuard to tighten; reopening is the owner's job there.
-/// @dev Runs on Reactive Network (Lasna testnet). The reflex table is the router's `POOL_REFLEX_BY_CHANGE`: the
+/// @dev Runs on Reactive Network (Lasna testnet). The reflex table is the router's, change kind by change kind: the
 ///      test pool can only change its fee, so only `fee_changed` is wired to an event; the rest is the table itself.
 contract PoolReflex is AbstractReactive {
     /// @notice keccak256("FeeUpdated(bytes32,uint24,uint24)"), emitted by the test pool's hook.
