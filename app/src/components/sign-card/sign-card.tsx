@@ -39,6 +39,8 @@ export type CardCheck = {
   items?: string;
   /** Rows revealed by [Details]: wallet, chain, contract, value, every movement. */
   detail?: ReadonlyArray<readonly [string, string]>;
+  /** One contest line inside the box, always visible, e.g. "Pool judgment circuit #7 · same judgment · Details". */
+  line?: ReactNode;
 };
 
 export type SignGate = {
@@ -200,6 +202,11 @@ function CheckBox({ check }: { check?: CardCheck }) {
         <b>{c.title}</b>
         {c.items && <span className="items"> {c.items}</span>}
       </span>
+      {c.line && (
+        <span className="ds-sum-line" data-row="check-line">
+          {c.line}
+        </span>
+      )}
     </>
   );
   // Nothing to reveal: a plain box, so it is not announced as expandable.

@@ -3,10 +3,11 @@ import { xLayer } from "viem/chains";
 import { describe, expect, it } from "vitest";
 import { packPins, OUTPUT_COUNT, unpackPins } from "@despell-lab/xlayer/src/bits.ts";
 import { judge } from "@despell-lab/xlayer/src/rule.ts";
+import { SELECTOR } from "@despell-lab/xlayer/src/onchain.ts";
 import { GIWA_SEPOLIA, BASE_SEPOLIA } from "@/lib/swap/chains";
 import { canSign } from "@/components/sign-card/sign-card";
 import { CIRCUIT, evaluateLocally, parseDeployment, type CircuitDeployment } from "./circuit";
-import { circuitGate, circuitLine, MISMATCH_TITLE, sameJudgment, type CircuitCheck } from "./check";
+import { checkFrom, circuitGate, circuitLine, MISMATCH_TITLE, sameJudgment, type CircuitCheck } from "./check";
 import { serverJudgmentFor } from "./server-judgment";
 import { EVAL_ABI, judgeOnXLayer } from "./xlayer-eval";
 
@@ -48,6 +49,32 @@ describe("the circuit gate on the card", () => {
   });
 });
 
+describe("checkFrom (the hook's wiring)", () => {
+  it("is checking while X Layer is being asked, including a re-judge, and the gate is pending", () => {
+    const check = checkFrom(server, DEPLOYMENT, { status: "asking" });
+    expect(check.kind).toBe("checking");
+    expect(circuitGate(check).state).toBe("pending");
+  });
+
+  it("compares the answer with the server's judgment", () => {
+    expect(checkFrom(server, DEPLOYMENT, { status: "answered", judgment: server.judgment, block: 5n }).kind).toBe("same");
+    const differs = checkFrom(server, DEPLOYMENT, { status: "answered", judgment: { stage: "blocked", lane: "closed" }, block: 5n });
+    expect(differs.kind).toBe("differs");
+    expect(circuitGate(differs).state).toBe("hold");
+  });
+
+  it("is unreachable after a failed read, not held (default to be confirmed)", () => {
+    const check = checkFrom(server, DEPLOYMENT, { status: "failed", reason: "HTTP 429" });
+    expect(check).toMatchObject({ kind: "unreachable", reason: "HTTP 429" });
+    expect(circuitGate(check).state).toBe("ok");
+  });
+
+  it("never asks without a server judgment or a deployment", () => {
+    expect(checkFrom(null, DEPLOYMENT, { status: "asking" }).kind).toBe("none");
+    expect(checkFrom(server, null, { status: "asking" }).kind).toBe("not-deployed");
+  });
+});
+
 describe("the server judgment", () => {
   it("is the rule's answer for its own inputs (the recorded sample is consistent)", () => {
     expect(judge(server.input)).toEqual(server.judgment);
@@ -80,7 +107,7 @@ describe("parseDeployment", () => {
 
 describe("judgeOnXLayer", () => {
   it("calls TapeOut's eval(uint256,bytes), the selector xlayer/src/onchain.ts uses", () => {
-    expect(toFunctionSelector(EVAL_ABI[0])).toBe("0x934d06ea");
+    expect(toFunctionSelector(EVAL_ABI[0])).toBe(`0x${SELECTOR.eval}`);
   });
 
   it("packs the input bits, reads the output bits back, and decodes the judgment", async () => {

@@ -80,6 +80,9 @@
 .ds-sum-title { font-size: 13px; color: var(--ds-fg-bright); min-width: 0; }
 .ds-sum-title b { font-weight: var(--ds-weight-semibold); }
 .ds-sum-title .items { color: var(--ds-fg-dim); font-weight: 400; }
+/* A contest's one line under the title (in the summary, so it shows while the box is closed). */
+.ds-sum-line { grid-column: 2 / -1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ds-fg-dim); }
+.ds-sum-line a { color: var(--ds-fg); }
 .ds-sum-toggle { cursor: pointer; color: var(--ds-fg-dim); font-size: 12px; text-decoration: underline dotted; text-underline-offset: 3px; white-space: nowrap; }
 .ds-sum-toggle .when-open { display: none; }
 .ds-sum[open] .ds-sum-toggle .when-open { display: inline; }

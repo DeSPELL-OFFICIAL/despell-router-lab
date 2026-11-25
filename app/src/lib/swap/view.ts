@@ -143,7 +143,10 @@ function check(state: CardState, decoded: DecodedPlan | null, decodeError: strin
     };
   }
   if (phase.kind === "failed") return { tone: "stop", title: "Transaction failed", items: `· ${phase.reason}` };
-  if (phase.kind === "blocked") return { tone: "stop", title: "Stopped before signing", items: `· ${phase.reason}` };
+  if (phase.kind === "blocked") {
+    // Without `at`, a sent transaction was released by [Check again] and the card is off until reload.
+    return { tone: "stop", title: phase.at === undefined ? "Released: reload to sign again" : "Stopped before signing", items: `· ${phase.reason}` };
+  }
   if (decodeError) return { tone: "stop", title: "These transactions do not match the card", items: `· ${decodeError}` };
   if (quoteError && !quote) return { tone: "stop", title: "No quote", items: `· ${quoteError}` };
   if (!quote) return { tone: "plain", title: "Getting a quote…" };

@@ -24,6 +24,31 @@ export type CircuitCheck =
   | { kind: "differs"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
   | { kind: "unreachable"; server: ServerJudgment; deployment: CircuitDeployment; reason: string };
 
+/** What the X Layer read looks like right now (from the query that asks it). */
+export type EvalState =
+  | { status: "asking" }
+  | { status: "failed"; reason: string }
+  | { status: "answered"; judgment: Judgment; block: bigint };
+
+/**
+ * The check for a pool, from the server's judgment, where the circuit is taped out, and the X Layer read. A read in
+ * flight (the first one or a re-judge) is "checking", so a card holds its sign button off until the answer is in.
+ */
+export function checkFrom(server: ServerJudgment | null, deployment: CircuitDeployment | null, read: EvalState): CircuitCheck {
+  if (!server) return { kind: "none" };
+  if (!deployment) return { kind: "not-deployed", server };
+  switch (read.status) {
+    case "asking":
+      return { kind: "checking", server, deployment };
+    case "failed":
+      return { kind: "unreachable", server, deployment, reason: read.reason };
+    case "answered":
+      return sameJudgment(server.judgment, read.judgment)
+        ? { kind: "same", server, deployment, circuit: read.judgment, block: read.block }
+        : { kind: "differs", server, deployment, circuit: read.judgment, block: read.block };
+  }
+}
+
 export function sameJudgment(a: Judgment, b: Judgment): boolean {
   return a.stage === b.stage && a.lane === b.lane;
 }

@@ -71,6 +71,11 @@ export function serverJudgmentFor(chainId: number, pool: string, opts: { demoMis
   return { ...found, judgment: { stage: found.judgment.stage, lane: otherLane(found.judgment.lane) }, demo: "mismatch" };
 }
 
-export function poolsWithJudgments(): readonly ServerJudgment[] {
-  return JUDGMENTS;
+/** The server's judgment of `pool` on whichever chain it was judged (the circuit page's route names the pool only). */
+export function serverJudgmentForPool(pool: string, opts: { demoMismatch?: boolean } = {}): ServerJudgment | null {
+  for (const j of JUDGMENTS) {
+    const found = serverJudgmentFor(j.chainId, pool, opts);
+    if (found) return found;
+  }
+  return null;
 }

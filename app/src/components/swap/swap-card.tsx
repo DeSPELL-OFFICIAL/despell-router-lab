@@ -22,10 +22,12 @@ export type SwapCardProps = {
   onCancel?: () => void;
   /** Told when this card starts and stops signing, so the page can keep other controls still. */
   onBusyChange?: (busy: boolean) => void;
+  /** A contest's one line inside the check box (e.g. the pool judgment circuit). */
+  checkLine?: ReactNode;
 };
 
 /** A live USDC -> ETH signing card on one test network. */
-export function SwapCard({ chain, amountIn, extraRows, gate, onCancel, onBusyChange }: SwapCardProps) {
+export function SwapCard({ chain, amountIn, extraRows, gate, onCancel, onBusyChange, checkLine }: SwapCardProps) {
   const swap = useSwap(chain, amountIn, gate);
   const phaseKind = swap.state.phase.kind;
   useEffect(() => {
@@ -51,7 +53,7 @@ export function SwapCard({ chain, amountIn, extraRows, gate, onCancel, onBusyCha
         route={view.route}
         cost={view.cost}
         extraRows={extraRows}
-        check={view.check}
+        check={checkLine ? { ...view.check, line: checkLine } : view.check}
         signLabel={view.signLabel}
         sign={{ simulation: view.simulation, busy: view.busy, onSign: () => void swap.sign() }}
         prerequisite={swap.prerequisite}
