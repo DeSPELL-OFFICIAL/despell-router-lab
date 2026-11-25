@@ -7,6 +7,7 @@
 .mono { font-family: var(--ds-font-mono); font-size: 12.5px; }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .note { margin: 0; font-size: 13px; color: var(--ds-fg-dim); }
+.card { display: grid; grid-template-columns: minmax(0, var(--ds-card-w)); }
 
 .meta { margin: 4px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 20px; }
 .meta div { min-width: 0; }

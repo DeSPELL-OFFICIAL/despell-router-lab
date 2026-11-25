@@ -12,9 +12,24 @@ import {IPositionManager} from "v4-periphery/src/interfaces/IPositionManager.sol
 import {DynamicFeeHook} from "../src/DynamicFeeHook.sol";
 import {BaseSepolia} from "../script/BaseSepolia.sol";
 import {Launch} from "../script/Launch.s.sol";
+import {LaunchSecondPool} from "../script/LaunchSecondPool.s.sol";
 import {Quote} from "../script/Quote.s.sol";
 import {Seed} from "../script/Seed.s.sol";
 import {SetFee} from "../script/SetFee.s.sol";
+import {TestPoolScript} from "../script/TestPoolScript.sol";
+import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {IV4Quoter} from "v4-periphery/src/interfaces/IV4Quoter.sol";
+
+/// @dev Seeds a pool from this contract's own ETH, with the scripts' seed code, so a test can seed a pool on the live
+///      hook without the live owner's key (adding liquidity is open to anyone; only initializing is the owner's).
+contract SeedFromHere is TestPoolScript {
+    function seed(PoolKey memory key, uint256 amountWei) external returns (uint256) {
+        return _seed(key, amountWei, address(this));
+    }
+
+    receive() external payable {}
+}
 
 /// @notice Runs the same scripts the live launch uses, on a fork of Base Sepolia, against Uniswap's real
 ///         PoolManager, PositionManager, StateView and V4Quoter. A throwaway key stands in for the deployer.
@@ -109,5 +124,97 @@ contract TestPoolForkTest is Test {
         assertGt(IPoolManager(BaseSepolia.POOL_MANAGER).getLiquidity(poolId), liquidityBefore);
         (, uint256 ethOut) = _quote(hook);
         assertApproxEqRel(ethOut, 0.0602 ether, 0.01e18, "0.01 + 0.09 ETH quotes like one 0.1 ETH seed");
+    }
+
+    function _quote10(PoolKey memory key) internal returns (uint256 ethOut) {
+        (ethOut,) = IV4Quoter(BaseSepolia.QUOTER)
+            .quoteExactInputSingle(
+                IV4Quoter.QuoteExactSingleParams({poolKey: key, zeroForOne: false, exactAmount: 10e6, hookData: ""})
+            );
+    }
+
+    function test_launchSecond_opensOnTheSameHookAtTheFirstPoolsPrice() public {
+        (DynamicFeeHook hook, PoolId first) = _launch(0.04 ether);
+        vm.recordLogs();
+        PoolId second = new LaunchSecondPool().launchSecond(hook, 0.01 ether);
+
+        IPoolManager manager = IPoolManager(BaseSepolia.POOL_MANAGER);
+        (uint160 firstPrice,,,) = manager.getSlot0(first);
+        (uint160 secondPrice,,, uint24 secondFee) = manager.getSlot0(second);
+        assertEq(secondPrice, firstPrice, "starts at the first pool's price");
+        assertEq(secondFee, BaseSepolia.INITIAL_FEE);
+        assertEq(hook.feeOf(second), BaseSepolia.INITIAL_FEE);
+
+        // The FeeUpdated(0 -> 500) that PoolReflex turns into "narrowed" for a new pool.
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool sawInitialFee;
+        for (uint256 i; i < logs.length; i++) {
+            if (logs[i].emitter == address(hook) && logs[i].topics[0] == DynamicFeeHook.FeeUpdated.selector) {
+                assertEq(logs[i].topics[1], PoolId.unwrap(second));
+                sawInitialFee = true;
+            }
+        }
+        assertTrue(sawInitialFee, "FeeUpdated for the second pool at initialize");
+
+        uint256 firstOut = _quote10(BaseSepolia.poolKey(hook));
+        uint256 secondOut = _quote10(BaseSepolia.poolKey(hook, BaseSepolia.SECOND_TICK_SPACING));
+        assertGt(secondOut, 0, "the second pool fills 10 USDC");
+        assertLt(secondOut, firstOut, "less liquidity, so the first pool pays more while both are open");
+
+        LaunchSecondPool again = new LaunchSecondPool();
+        vm.expectRevert("second pool already initialized");
+        again.launchSecond(hook, 0.01 ether);
+    }
+
+    function test_setFee_tickSpacingPicksThePool() public {
+        (DynamicFeeHook hook, PoolId first) = _launch(0.04 ether);
+        PoolId second = new LaunchSecondPool().launchSecond(hook, 0.01 ether);
+
+        (uint24 oldFee, uint24 newFee) = new SetFee().setFee(hook, 3000, BaseSepolia.SECOND_TICK_SPACING);
+        assertEq(oldFee, 500);
+        assertEq(newFee, 3000);
+        assertEq(hook.feeOf(second), 3000);
+        assertEq(hook.feeOf(first), 500, "the first pool keeps its fee");
+
+        SetFee setFee = new SetFee();
+        vm.expectRevert("TICK_SPACING must be 10 (first pool) or 60 (second pool)");
+        setFee.setFee(hook, 3000, 30);
+
+        // Seed takes the same choice: more ETH in the second pool, none in the first.
+        IPoolManager manager = IPoolManager(BaseSepolia.POOL_MANAGER);
+        uint128 firstBefore = manager.getLiquidity(first);
+        uint256 out = _quote10(BaseSepolia.poolKey(hook, BaseSepolia.SECOND_TICK_SPACING));
+        new Seed().seed(hook, 0.05 ether, BaseSepolia.SECOND_TICK_SPACING);
+        assertGt(_quote10(BaseSepolia.poolKey(hook, BaseSepolia.SECOND_TICK_SPACING)), out, "deeper, so it pays more");
+        assertEq(manager.getLiquidity(first), firstBefore);
+    }
+
+    /// @notice Pool B on the live hook beside the live pool A: opened at A's price (rehearsed here with the live owner
+    ///         until the real launch, read as it is after), and while both are open A pays more for 10 USDC.
+    function test_live_secondPoolOnTheLiveHookQuotesBelowTheFirst() public {
+        IHooks live = IHooks(vm.parseJsonAddress(vm.readFile("deployments/base-sepolia.json"), ".hook"));
+        PoolKey memory firstKey = BaseSepolia.poolKey(live);
+        PoolKey memory secondKey = BaseSepolia.poolKey(live, BaseSepolia.SECOND_TICK_SPACING);
+        bytes32 appPoolBId = 0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2;
+        assertEq(PoolId.unwrap(secondKey.toId()), appPoolBId, "the second pool id the app lists");
+
+        IPoolManager manager = IPoolManager(BaseSepolia.POOL_MANAGER);
+        (uint160 secondNow,,,) = manager.getSlot0(secondKey.toId());
+        if (secondNow == 0) {
+            (uint160 firstPrice,,,) = manager.getSlot0(firstKey.toId());
+            vm.prank(DynamicFeeHook(address(live)).owner());
+            manager.initialize(secondKey, firstPrice);
+            SeedFromHere seeder = new SeedFromHere();
+            vm.deal(address(seeder), 1 ether);
+            vm.prank(address(seeder));
+            seeder.seed(secondKey, 0.01 ether);
+        }
+
+        uint256 firstOut = _quote10(firstKey);
+        uint256 secondOut = _quote10(secondKey);
+        emit log_named_uint("first pool, 10 USDC -> wei", firstOut);
+        emit log_named_uint("second pool, 10 USDC -> wei", secondOut);
+        assertGt(secondOut, 0);
+        assertLt(secondOut, firstOut);
     }
 }

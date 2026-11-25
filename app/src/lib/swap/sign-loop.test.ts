@@ -9,7 +9,7 @@ import { gateStopReason } from "./view";
 const NOW = 1_795_700_000;
 const plan: SwapPlan = buildPlan({
   chain: BASE_SEPOLIA,
-  quote: { chainId: BASE_SEPOLIA.id, amountIn: 10_000_000n, expectedOut: 6_000_000_000_000_000n, block: 1n, at: NOW * 1000, lpFee: 500 },
+  quote: { chainId: BASE_SEPOLIA.id, amountIn: 10_000_000n, expectedOut: 6_000_000_000_000_000n, block: 1n, at: NOW * 1000, lpFee: 500, pool: BASE_SEPOLIA.pools[0].id },
   wallet: { account: getAddress("0x1111111111111111111111111111111111111111"), usdcBalance: 20_000_000n, erc20Allowance: 0n, permit2: { amount: 0n, expiration: 0 } },
   nowSec: NOW,
 });
@@ -73,6 +73,41 @@ describe("runSigning", () => {
     const result = await runSigning(plan, h.deps);
     expect(result).toEqual({ kind: "stopped", step: 1, reason: "held: pool fee changed" });
     expect(h.sent).toHaveLength(1);
+  });
+
+  it("awaits the contest's fresh check before each simulation, and stops on its reason", async () => {
+    const order: string[] = [];
+    let marked = false;
+    const h = harness({
+      afterConfirm: (step) => {
+        if (step === 0) marked = true;
+      },
+      freshCheck: async () => {
+        order.push("check");
+        return marked ? "test pool A was left out of the route" : null;
+      },
+    });
+    const simulate = h.deps.simulate;
+    h.deps.simulate = async (from, minBlock) => {
+      order.push("simulate");
+      return simulate(from, minBlock);
+    };
+    const result = await runSigning(plan, h.deps);
+    expect(result).toEqual({ kind: "stopped", step: 1, reason: "test pool A was left out of the route" });
+    expect(order).toEqual(["check", "simulate", "check"]);
+    expect(h.sent).toHaveLength(1);
+  });
+
+  it("stops when the fresh check cannot be made", async () => {
+    const h = harness({
+      freshCheck: async () => {
+        throw new Error("HTTP 429\nmore");
+      },
+    });
+    const result = await runSigning(plan, h.deps);
+    expect(result).toEqual({ kind: "stopped", step: 0, reason: "the check before signing failed: HTTP 429" });
+    expect(h.sent).toHaveLength(0);
+    expect(h.simulatedFrom).toHaveLength(0);
   });
 
   it("stops when the card goes away while a transaction confirms", async () => {

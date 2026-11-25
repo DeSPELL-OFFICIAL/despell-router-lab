@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import type { Hex } from "viem";
 import { SignCard } from "@/components/sign-card/sign-card";
 import type { SwapChain } from "@/lib/swap/chains";
 import { cardView, type ContestGate } from "@/lib/swap/view";
@@ -18,6 +19,16 @@ export type SwapCardProps = {
    * stop, "ok" to allow. Only "ok" lets the sign button turn on. Pages with no check pass NO_CONTEST_CHECK.
    */
   gate: ContestGate;
+  /**
+   * Base Sepolia: pools the contest's check leaves out of the route. The quote skips them, and a plan through one of
+   * them is not signed. `null` while the check has not answered yet (no quote is read). Default: none.
+   */
+  leaveOut?: readonly Hex[] | null;
+  /**
+   * Base Sepolia: reads the pools to leave out again, awaited right before each transaction is simulated and sent.
+   * A plan through a pool it returns is not sent; a failed read stops signing.
+   */
+  recheckLeaveOut?: () => Promise<readonly Hex[]>;
   /** Cancel closes the card. Leave it out while another card is signing. */
   onCancel?: () => void;
   /** Told when this card starts and stops signing, so the page can keep other controls still. */
@@ -27,8 +38,8 @@ export type SwapCardProps = {
 };
 
 /** A live USDC -> ETH signing card on one test network. */
-export function SwapCard({ chain, amountIn, extraRows, gate, onCancel, onBusyChange, checkLine }: SwapCardProps) {
-  const swap = useSwap(chain, amountIn, gate);
+export function SwapCard({ chain, amountIn, extraRows, gate, leaveOut = [], recheckLeaveOut, onCancel, onBusyChange, checkLine }: SwapCardProps) {
+  const swap = useSwap(chain, amountIn, gate, leaveOut, recheckLeaveOut);
   const phaseKind = swap.state.phase.kind;
   useEffect(() => {
     onBusyChange?.(phaseKind === "signing" || phaseKind === "unconfirmed");

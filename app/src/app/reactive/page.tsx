@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+import { MarkedPoolSwap } from "@/components/reactive/marked-pool-swap";
 import {
+  hookPools,
   journalNewestFirst,
   markedStatus,
   oneDecimal,
-  rangeLine,
   readMarksNow,
   reflexPage,
   shortHex,
+  span,
   statusLabel,
   summarize,
   utc,
@@ -137,7 +139,8 @@ function JournalItem({ j, open }: { j: JournalEntry; open: boolean }) {
 export default async function Page() {
   const page = reflexPage;
   const s = summarize(page);
-  const live = await readMarksNow(page);
+  const pools = hookPools(page);
+  const live = await readMarksNow(page, pools);
   const marksOn = live ? live.marks.filter((m) => m.status > 0).length : null;
   const journal = journalNewestFirst(page);
   const last = journal.find((j) => markedStatus(j) !== null);
@@ -150,8 +153,9 @@ export default async function Page() {
         <h1 className="lab-h1">On-chain reflex</h1>
         <p className="lab-lede">
           When a pool the DeSpell router might use changes a setting, a Reactive contract marks that pool as narrowed on-chain, and
-          anyone can read the mark. The router caps a narrowed pool at 0.1x its usual size. These numbers were measured on
-          testnets, with every transaction linked.
+          anyone can read the mark. The router caps a narrowed pool at 0.1x its usual size; so far the only quote that reads these
+          marks is this lab&apos;s test swap card below, which leaves a marked pool out. These numbers were measured on testnets,
+          with every transaction linked.
         </p>
         <dl className={styles.meta}>
           <div>
@@ -184,22 +188,21 @@ export default async function Page() {
         <dl className={styles.stats}>
           <div>
             <dt>Watched pools</dt>
-            <dd>{page.watchedPools.length}</dd>
+            <dd>{pools.length}</dd>
           </div>
           <div>
-            <dt>Marks on now</dt>
+            <dt>Marks on</dt>
             <dd>
               {marksOn ?? "—"}
-              <small>{live ? `read from PoolGuard · ${utc(live.readAt)}` : "live read unavailable"}</small>
+              <small>{live ? `last read ${utc(live.readAt)} · PoolGuard` : "live read unavailable"}</small>
             </dd>
           </div>
           <div>
             <dt>Change to mark</dt>
             <dd>
-              {s.medianSeconds} s
+              ≈ {oneDecimal((s.medianBlocks ?? NaN) * s.blockSeconds)} s<span className={styles.of}> ({s.medianBlocks} blocks)</span>
               <small>
-                median · n = {s.n} · {s.medianBlocks} blocks ≈ {oneDecimal((s.medianBlocks ?? NaN) * s.blockSeconds)} s · range{" "}
-                {rangeLine(s)}
+                median · n = {s.n} · range {span(s.minBlocks, s.maxBlocks)} blocks · block time difference {span(s.minSeconds, s.maxSeconds)} s
               </small>
             </dd>
           </div>
@@ -215,6 +218,20 @@ export default async function Page() {
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section aria-labelledby="quote-h" className={styles.section}>
+        <h2 id="quote-h" className="lab-h2">
+          A quote that reads the marks
+        </h2>
+        <p className={styles.note}>
+          The card reads PoolGuard for both test pools before it quotes, takes the better of the pools left, and adds a
+          &ldquo;Left out&rdquo; row for a marked one. With both marked there is no route. It reads the marks every 2 seconds and
+          stops before the next signature if the pool it swaps through is marked meanwhile.
+        </p>
+        <div className={styles.card}>
+          <MarkedPoolSwap />
+        </div>
       </section>
 
       <section aria-labelledby="marks-h" className={styles.section}>
@@ -234,8 +251,9 @@ export default async function Page() {
               </tr>
             </thead>
             <tbody>
-              {page.watchedPools.map((pool) => {
+              {pools.map((pool) => {
                 const now = live?.marks.find((m) => m.poolId === pool.poolId);
+                const run = pool.measured ? last : undefined;
                 return (
                   <tr key={pool.poolId}>
                     <td>
@@ -243,10 +261,10 @@ export default async function Page() {
                       <br />
                       <span className="ds-dim">{pool.label}</span>
                     </td>
-                    <td>fee {last?.change?.label ?? "—"}</td>
-                    <td className={styles.num}>{last?.origin?.block ?? "—"}</td>
-                    <td className={styles.num}>{last?.mark?.block ?? "—"}</td>
-                    <td className={styles.num}>{last ? `${last.seconds} s · ${last.blocks} blocks` : "—"}</td>
+                    <td>{run ? `fee ${run.change?.label ?? "—"}` : <span className="ds-dim">not measured</span>}</td>
+                    <td className={styles.num}>{run?.origin?.block ?? "—"}</td>
+                    <td className={styles.num}>{run?.mark?.block ?? "—"}</td>
+                    <td className={styles.num}>{run ? `${run.seconds} s · ${run.blocks} blocks` : "—"}</td>
                     <td>{now ? <Status status={now.status} /> : <span className="ds-dim">—</span>}</td>
                   </tr>
                 );
@@ -255,7 +273,9 @@ export default async function Page() {
           </table>
         </div>
         <p className={styles.note}>
-          Each measured change was marked narrowed and then reopened by the operator, so the pool reads open between runs.
+          Each measured change was marked narrowed and then reopened by the operator, so the pool reads open between runs. Test
+          pool B, on the same hook, was added after the measured runs as the quote&apos;s second route; its marks are not part of the
+          timings.
         </p>
       </section>
 

@@ -7,6 +7,8 @@ review. Today a server patrol does this and can take up to 60 seconds. This fold
    its fee emits one `FeeUpdated` event. *(`src/`, live)*
 2. A Reactive contract on Reactive Lasna that hears `FeeUpdated` and, through a callback, marks the pool as
    narrowed on a `PoolGuard` contract on Base Sepolia. Anyone reads the mark with `statusOf(pool)`. *(`reflex/`)*
+3. A quote that reads the marks — the app's swap card on `/reactive` quotes both test pools, leaves a marked one out
+   with a "Left out" row, and stops with no route when both are marked. *(`app/src/components/reactive/`)*
 
 Marks only tighten, and nothing here moves anyone's money.
 
@@ -21,6 +23,20 @@ Marks only tighten, and nothing here moves anyone's money.
 | Uniswap v4 ([official list](https://docs.uniswap.org/contracts/v4/deployments)) | PoolManager `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` · StateView `0x571291b572ed32ce6751a2Cb2486EbEe8DEfB9B4` · V4Quoter `0x5e6B8B8AFA7e5CEF6C09dd2A67aBA9FB12C75623` · PositionManager `0x4B2C77d209D3405F41a037Ec6c77F7F5b8e2ca80` |
 
 Machine-readable copy: [`deployments/base-sepolia.json`](deployments/base-sepolia.json).
+
+### Test pool B
+
+A second pool on the same hook, so PoolReflex watches it too and the quote has another route when pool A is marked.
+`script/LaunchSecondPool.s.sol` opens it at pool A's price and seeds an ETH-only position; with less liquidity than A,
+it pays a little less, so the quote takes A while both are open.
+
+| What | Value |
+| --- | --- |
+| Pool id | `0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2` |
+| Pool key | as pool A, with tick spacing 60 |
+| Opened by | `reflex/scripts/route-demo.mjs`; its transactions go to [`deployments/route-demo-base-sepolia.json`](deployments/route-demo-base-sepolia.json) |
+
+Opening a pool emits `FeeUpdated(0 → 500)`, and PoolReflex marks every new pool narrowed until the operator reopens it.
 
 ### The event a Reactive contract subscribes to
 
@@ -167,8 +183,10 @@ its deployed bytecode can be rebuilt.
 | `script/DeployReflex.s.sol` | Deploys and funds PoolReflex (subscribes in its constructor) | Lasna |
 | `script/DeployGuard.s.sol` | Deploys and funds PoolGuard, accepting marks from PoolReflex only | Base Sepolia |
 | `script/SetGuard.s.sol` | Points PoolReflex at PoolGuard, once | Lasna |
-| `script/Reopen.s.sol` | The owner reopens the test pool | Base Sepolia |
+| `script/Reopen.s.sol` | The owner reopens a test pool (`POOL_ID`, default pool A) | Base Sepolia |
 | `scripts/measure.mjs` | Changes the fee, waits for the mark, records the three transactions, reopens, repeats | both |
+| `scripts/route-demo.mjs` | Opens test pool B, then holds three states for the app's card: both marked, only A marked, both open | Base Sepolia |
+| `scripts/chain.mjs` | The JSON-RPC reads, forge runs and mark wait the two scripts above share | — |
 | `scripts/report.mjs` | Turns a measurement into `deployments/reflex-page.json` and this README's latency table (no key) | — |
 
 ## Build and test
@@ -199,9 +217,10 @@ node --env-file=<your env file> scripts/with-key.mjs -- forge script script/SetF
 | Script | Does | Inputs |
 | --- | --- | --- |
 | `Launch.s.sol` | Mines the hook address, deploys the hook, initializes the pool, seeds ETH (3 transactions) | `SEED_WEI` |
-| `SetFee.s.sol` | Changes the LP fee (1 transaction, one `FeeUpdated`) | `NEW_FEE` (500 = 0.05%, 100000 = 10%) |
-| `Seed.s.sol` | Adds another ETH-only position at the current price | `SEED_WEI` |
-| `Quote.s.sol` | Read-only: pool state and a USDC → ETH quote | `USDC_IN` (default 10 USDC) |
+| `LaunchSecondPool.s.sol` | Opens test pool B on the same hook at pool A's price and seeds ETH (2 transactions) | `SEED_WEI` |
+| `SetFee.s.sol` | Changes the LP fee (1 transaction, one `FeeUpdated`) | `NEW_FEE` (500 = 0.05%, 100000 = 10%), `TICK_SPACING` (10 = pool A, the default; 60 = pool B) |
+| `Seed.s.sol` | Adds another ETH-only position at the current price | `SEED_WEI`, `TICK_SPACING` |
+| `Quote.s.sol` | Read-only: pool state and a USDC → ETH quote | `USDC_IN` (default 10 USDC), `TICK_SPACING` |
 | `Status.s.sol` | Read-only: the deployer's balances | — |
 | `BridgeToBaseSepolia.s.sol` | Moves test ETH from Ethereum Sepolia through Base's official bridge | `BRIDGE_WEI` |
 

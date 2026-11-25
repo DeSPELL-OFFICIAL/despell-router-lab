@@ -16,17 +16,22 @@ import {TestPoolScript} from "./TestPoolScript.sol";
 /// @notice Read-only: prints the test pool's state from Uniswap's StateView and a USDC -> ETH quote from
 ///         Uniswap's V4Quoter. Sends nothing and needs no key.
 /// @dev forge script script/Quote.s.sol --rpc-url base_sepolia        (USDC_IN defaults to 10 USDC)
+///      TICK_SPACING=60 reads the second test pool.
 ///      Add `--fork-block-number <n>` to read the pool as it was at block n.
 contract Quote is TestPoolScript {
     function run() external returns (uint24 lpFee, uint256 ethOut) {
         uint256 usdcIn = vm.envOr("USDC_IN", uint256(10e6));
         require(usdcIn <= type(uint128).max, "USDC_IN too large");
-        return quote(_hook(), uint128(usdcIn));
+        return quote(_hook(), uint128(usdcIn), vm.envOr("TICK_SPACING", int256(BaseSepolia.TICK_SPACING)));
     }
 
     function quote(IHooks hook, uint128 usdcIn) public returns (uint24 lpFee, uint256 ethOut) {
+        return quote(hook, usdcIn, BaseSepolia.TICK_SPACING);
+    }
+
+    function quote(IHooks hook, uint128 usdcIn, int256 tickSpacing) public returns (uint24 lpFee, uint256 ethOut) {
         _requireBaseSepolia();
-        PoolKey memory key = BaseSepolia.poolKey(hook);
+        PoolKey memory key = BaseSepolia.knownPoolKey(hook, tickSpacing);
         PoolId poolId = key.toId();
 
         IStateView stateView = IStateView(BaseSepolia.STATE_VIEW);

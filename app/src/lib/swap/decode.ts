@@ -16,6 +16,8 @@ export type DecodedStep =
   | {
       kind: "swap";
       to: Address;
+      /** Base Sepolia: the listed pool the bytes swap through. */
+      pool?: Hex;
       tokenIn: Address;
       amountIn: bigint;
       /** Native ETH. */
@@ -46,11 +48,17 @@ function decodeV4Swap(chain: Extract<SwapChain, { dex: "uniswap-v4" }>, step: St
   const [swap] = decodeAbiParameters(v4ExactInSingle, params[0]);
   const [settleCurrency, maxIn] = decodeAbiParameters(v4SettleAll, params[1]);
   const [takeCurrency, recipient, takeAmount] = decodeAbiParameters(v4Take, params[2]);
-  const key = chain.pool.key;
-  same(swap.poolKey.currency0, key.currency0, "pool currency0");
-  same(swap.poolKey.currency1, key.currency1, "pool currency1");
-  same(swap.poolKey.hooks, key.hooks, "pool hook");
-  if (swap.poolKey.fee !== key.fee || swap.poolKey.tickSpacing !== key.tickSpacing) fail("pool fee or tick spacing");
+  const k = swap.poolKey;
+  const pool = chain.pools.find(
+    (p) =>
+      isAddressEqual(k.currency0, p.key.currency0) &&
+      isAddressEqual(k.currency1, p.key.currency1) &&
+      isAddressEqual(k.hooks, p.key.hooks) &&
+      k.fee === p.key.fee &&
+      k.tickSpacing === p.key.tickSpacing,
+  );
+  if (!pool) fail(`pool (${k.currency0}, ${k.currency1}, fee ${k.fee}, spacing ${k.tickSpacing}, hook ${k.hooks}) is not listed`);
+  const key = pool.key;
   if (swap.zeroForOne !== false || swap.hookData !== "0x") fail("swap direction or hook data");
   same(settleCurrency, chain.usdc.address, "paid currency");
   if (maxIn !== swap.amountIn) fail("settle amount differs from swap amount");
@@ -59,6 +67,7 @@ function decodeV4Swap(chain: Extract<SwapChain, { dex: "uniswap-v4" }>, step: St
   return {
     kind: "swap",
     to: step.tx.to,
+    pool: pool.id,
     tokenIn: chain.usdc.address,
     amountIn: swap.amountIn,
     minOut: swap.amountOutMinimum,

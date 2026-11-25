@@ -15,18 +15,24 @@ import {TestPoolScript} from "./TestPoolScript.sol";
 ///         a bip: 500 = 0.05%, 100000 = 10%.
 /// @dev NEW_FEE=100000 forge script script/SetFee.s.sol --rpc-url base_sepolia --broadcast
 ///      (run through scripts/with-key.mjs; the hook comes from HOOK or deployments/base-sepolia.json)
+///      TICK_SPACING=60 picks the second test pool; the default, 10, is the first.
 contract SetFee is TestPoolScript {
     function run() external returns (uint24 oldFee, uint24 newFee) {
         uint256 fee = vm.envUint("NEW_FEE");
         // Check before narrowing: a mistyped value must not wrap into some other valid fee.
         require(fee <= LPFeeLibrary.MAX_LP_FEE, "NEW_FEE above 1000000 (100%)");
-        return setFee(DynamicFeeHook(address(_hook())), uint24(fee));
+        int256 spacing = vm.envOr("TICK_SPACING", int256(BaseSepolia.TICK_SPACING));
+        return setFee(DynamicFeeHook(address(_hook())), uint24(fee), spacing);
     }
 
     function setFee(DynamicFeeHook hook, uint24 fee) public returns (uint24 oldFee, uint24 newFee) {
+        return setFee(hook, fee, BaseSepolia.TICK_SPACING);
+    }
+
+    function setFee(DynamicFeeHook hook, uint24 fee, int256 tickSpacing) public returns (uint24 oldFee, uint24 newFee) {
         _requireBaseSepolia();
         newFee = fee;
-        PoolKey memory key = BaseSepolia.poolKey(hook);
+        PoolKey memory key = BaseSepolia.knownPoolKey(hook, tickSpacing);
         PoolId poolId = key.toId();
 
         oldFee = hook.feeOf(poolId);

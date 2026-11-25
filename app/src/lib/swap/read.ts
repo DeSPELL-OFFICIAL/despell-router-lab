@@ -1,14 +1,17 @@
 import {
+  BaseError,
+  ContractFunctionRevertedError,
   decodeEventLog,
   encodeFunctionData,
   isAddressEqual,
   type Address,
+  type Hex,
   type PublicClient,
   type TransactionReceipt,
 } from "viem";
 import { simulateCalls } from "viem/actions";
 import { erc20Abi, mockMintAbi, permit2Abi, stateViewAbi, swapRouter02Abi, v4PoolManagerSwapEvent, v4QuoterAbi, wethWithdrawalEvent } from "./abi";
-import type { SwapChain } from "./chains";
+import type { BaseSepoliaSwap, SwapChain, V4Pool } from "./chains";
 import { ROUTER_KEEPS_OUTPUT, type Quote, type Step, type SwapPlan, type WalletState } from "./plan";
 
 /*
@@ -19,20 +22,54 @@ import { ROUTER_KEEPS_OUTPUT, type Quote, type Step, type SwapPlan, type WalletS
 /** Address that only ever appears in read-only simulations (no key exists for it). */
 const PROBE: Address = "0x00000000000000000000000000000000DE5BE11a";
 
-export async function readQuote(client: PublicClient, chain: SwapChain, amountIn: bigint): Promise<Quote> {
+/** No listed pool is left to quote, or none of those left can fill the amount. */
+export class NoRouteError extends Error {
+  override name = "NoRouteError";
+}
+
+/** The quoter reverted for this pool (not initialized, not enough liquidity), as opposed to an RPC failure. */
+function reverted(error: unknown): boolean {
+  return error instanceof BaseError && error.walk((e) => e instanceof ContractFunctionRevertedError) !== null;
+}
+
+async function quotePool(client: PublicClient, chain: BaseSepoliaSwap, pool: V4Pool, amountIn: bigint, block: bigint) {
+  const [{ result }, slot0] = await Promise.all([
+    client.simulateContract({
+      address: chain.quoter,
+      abi: v4QuoterAbi,
+      functionName: "quoteExactInputSingle",
+      args: [{ poolKey: pool.key, zeroForOne: false, exactAmount: amountIn, hookData: "0x" }],
+      blockNumber: block,
+    }),
+    client.readContract({ address: chain.stateView, abi: stateViewAbi, functionName: "getSlot0", args: [pool.id], blockNumber: block }),
+  ]);
+  return { pool, expectedOut: result[0], lpFee: slot0[3] };
+}
+
+/**
+ * A quote for `amountIn` USDC -> ETH. On Base Sepolia it quotes every listed pool not in `leaveOut` at one block and
+ * keeps the one that pays the most; a pool the quoter cannot use (not initialized, too little liquidity) drops out,
+ * and when none is left it throws NoRouteError. An RPC failure on any pool fails the whole quote rather than quietly
+ * picking another pool.
+ */
+export async function readQuote(client: PublicClient, chain: SwapChain, amountIn: bigint, leaveOut: readonly Hex[] = []): Promise<Quote> {
   const block = await client.getBlockNumber({ cacheTime: 0 });
   if (chain.dex === "uniswap-v4") {
-    const [{ result }, slot0] = await Promise.all([
-      client.simulateContract({
-        address: chain.quoter,
-        abi: v4QuoterAbi,
-        functionName: "quoteExactInputSingle",
-        args: [{ poolKey: chain.pool.key, zeroForOne: false, exactAmount: amountIn, hookData: "0x" }],
-        blockNumber: block,
-      }),
-      client.readContract({ address: chain.stateView, abi: stateViewAbi, functionName: "getSlot0", args: [chain.pool.id], blockNumber: block }),
-    ]);
-    return { chainId: chain.id, amountIn, expectedOut: result[0], block, at: Date.now(), lpFee: slot0[3] };
+    const out = new Set(leaveOut.map((id) => id.toLowerCase()));
+    const candidates = chain.pools.filter((p) => !out.has(p.id.toLowerCase()));
+    if (candidates.length === 0) throw new NoRouteError("every listed pool is left out");
+    const tried = await Promise.all(
+      candidates.map((pool) =>
+        quotePool(client, chain, pool, amountIn, block).catch((error: unknown) => {
+          if (!reverted(error)) throw error;
+          return { pool, expectedOut: 0n, lpFee: 0 };
+        }),
+      ),
+    );
+    const usable = tried.filter((q) => q.expectedOut > 0n);
+    if (usable.length === 0) throw new NoRouteError(`no pool left can fill ${amountIn} USDC units (${candidates.map((p) => p.label).join(", ")})`);
+    const best = usable.reduce((a, b) => (b.expectedOut > a.expectedOut ? b : a));
+    return { chainId: chain.id, amountIn, expectedOut: best.expectedOut, block, at: Date.now(), lpFee: best.lpFee, pool: best.pool.id };
   }
   // No Uniswap quoter on GIWA Sepolia points at this factory, so the quote is the swap itself, simulated:
   // a probe address mints the mock USDC (anyone can), approves the router and swaps. Nothing is sent.
@@ -150,7 +187,7 @@ export function receivedFromReceipt(chain: SwapChain, receipt: TransactionReceip
       if (chain.dex === "uniswap-v4") {
         const ev = decodeEventLog({ abi: v4PoolManagerSwapEvent, data: log.data, topics: log.topics });
         // amount0 is the ETH side of the swap; the PoolManager emits the swapper's delta (positive = paid out).
-        if (ev.args.id === chain.pool.id) return ev.args.amount0 < 0n ? -ev.args.amount0 : ev.args.amount0;
+        if (chain.pools.some((p) => p.id === ev.args.id)) return ev.args.amount0 < 0n ? -ev.args.amount0 : ev.args.amount0;
       } else if (isAddressEqual(log.address, chain.weth)) {
         // unwrapWETH9 turns the router's WETH into the ETH it sends on, in one Withdrawal.
         const ev = decodeEventLog({ abi: wethWithdrawalEvent, data: log.data, topics: log.topics });

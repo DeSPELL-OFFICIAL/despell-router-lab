@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import recorded from "@despell-lab/reactive/reflex-page.json";
+import { BASE_SEPOLIA } from "./swap/chains";
 import {
+  hookPools,
   journalNewestFirst,
   markedStatus,
   median,
   oneDecimal,
   parseReflexPage,
-  rangeLine,
   readMarksNow,
   reflexPage,
   shortHex,
+  span,
   summarize,
   utc,
 } from "./reflex";
@@ -35,7 +37,9 @@ describe("the recorded measurement", () => {
   it("measured 14 marks: median 1 s (6.5 blocks), 1–2 s and 4–10 blocks, 6 within 5 blocks", () => {
     const s = summarize(reflexPage);
     expect([s.n, s.medianSeconds, s.medianBlocks, s.withinFiveBlocks, s.withinTenBlocks]).toEqual([14, 1, 6.5, 6, 14]);
-    expect(rangeLine(s)).toBe("1–2 s · 4–10 blocks");
+    expect(span(s.minSeconds, s.maxSeconds)).toBe("1–2");
+    expect(span(s.minBlocks, s.maxBlocks)).toBe("4–10");
+    expect([span(3, 3), span(null, null)]).toEqual(["3", "—"]);
   });
 
   it("measures the block time from the runs themselves: about 0.2 s", () => {
@@ -97,6 +101,12 @@ describe("helpers", () => {
     expect(median([])).toBeNull();
   });
 
+  it("takes the status a run's Marked event recorded over the reflex table", () => {
+    const j = reflexPage.journal[0];
+    expect(markedStatus(j)).toBe(2); // the 14 recorded runs predate newStatus: the table's fee_changed
+    expect(markedStatus({ ...j, mark: { ...j.mark!, newStatus: 3 } })).toBe(3);
+  });
+
   it("reads a kept or missing run as no new mark", () => {
     const j = reflexPage.journal[0];
     expect(markedStatus({ ...j, result: "kept" })).toBeNull();
@@ -123,10 +133,10 @@ describe("readMarksNow", () => {
     (async () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }))) as typeof fetch;
   const at = () => new Date("2026-11-26T00:00:00Z");
 
-  it("reads PoolGuard.statusOf for each watched pool", async () => {
-    const live = await readMarksNow(reflexPage, reply(`0x${"0".repeat(63)}2`), at);
+  it("reads PoolGuard.statusOf for each pool on the watched hook", async () => {
+    const live = await readMarksNow(reflexPage, undefined, reply(`0x${"0".repeat(63)}2`), at);
     expect(live).toEqual({
-      marks: [{ poolId: reflexPage.watchedPools[0].poolId, status: 2, label: "narrowed (0.1x)" }],
+      marks: BASE_SEPOLIA.pools.map((p) => ({ poolId: p.id, status: 2, label: "narrowed (0.1x)" })),
       readAt: "2026-11-26T00:00:00.000Z",
     });
   });
@@ -137,7 +147,7 @@ describe("readMarksNow", () => {
       sent = JSON.parse(String(init.body)).params[0];
       return new Response(JSON.stringify({ result: `0x${"0".repeat(64)}` }));
     }) as unknown as typeof fetch;
-    await readMarksNow(reflexPage, spy, at);
+    await readMarksNow(reflexPage, reflexPage.watchedPools, spy, at);
     expect(sent?.to).toBe(reflexPage.contracts.poolGuard.address);
     expect(sent?.data).toBe(`0xc7df14e2${reflexPage.watchedPools[0].poolId.slice(2)}`);
   });
@@ -146,8 +156,18 @@ describe("readMarksNow", () => {
     const down = (async () => {
       throw new Error("offline");
     }) as typeof fetch;
-    expect(await readMarksNow(reflexPage, down, at)).toBeNull();
-    expect(await readMarksNow(reflexPage, reply("0x"), at)).toBeNull();
-    expect(await readMarksNow(reflexPage, reply(undefined), at)).toBeNull();
+    expect(await readMarksNow(reflexPage, undefined, down, at)).toBeNull();
+    expect(await readMarksNow(reflexPage, undefined, reply("0x"), at)).toBeNull();
+    expect(await readMarksNow(reflexPage, undefined, reply(undefined), at)).toBeNull();
+  });
+});
+
+describe("hookPools", () => {
+  it("lists every lab pool on the watched hook and marks the one the runs measured", () => {
+    expect(hookPools(reflexPage)).toEqual([
+      { poolId: BASE_SEPOLIA.pools[0].id, label: "Uniswap v4 ETH/USDC · test pool A", measured: true },
+      { poolId: BASE_SEPOLIA.pools[1].id, label: "Uniswap v4 ETH/USDC · test pool B", measured: false },
+    ]);
+    expect(reflexPage.watchedPools[0].poolId).toBe(BASE_SEPOLIA.pools[0].id);
   });
 });

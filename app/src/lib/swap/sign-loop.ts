@@ -35,6 +35,11 @@ export type SignDeps = {
   nonceOf: (hash: Hex) => Promise<number | null>;
   /** Why signing must stop now (card closed, contest gate not open), or null to go on. Read between transactions. */
   stopReason: () => string | null;
+  /**
+   * Awaited before each transaction's simulation: a contest's own fresh read (the on-chain pool marks on /reactive).
+   * A reason, or a failure, stops the loop before the wallet is asked.
+   */
+  freshCheck?: () => Promise<string | null>;
   onPhase: (phase: Phase) => void;
   nowMs: () => number;
   sleep: (ms: number) => Promise<void>;
@@ -86,6 +91,10 @@ export async function runSigning(plan: SwapPlan, deps: SignDeps): Promise<SignRe
     if (why) return { kind: "stopped", step, reason: why };
     deps.onPhase({ kind: "signing", step, total, waiting: "simulating" });
     if (deps.nowMs() / 1000 > plan.deadline - 60) return { kind: "stopped", step, reason: "the quote is about to expire" };
+    if (deps.freshCheck) {
+      why = await deps.freshCheck().catch((error: unknown) => `the check before signing failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      if (why) return { kind: "stopped", step, reason: why };
+    }
     let sim = await deps.simulate(step, minBlock);
     for (let retry = 0; !sim.ok && minBlock !== undefined && retry < LAG_RETRIES; retry++) {
       await deps.sleep(LAG_RETRY_MS);

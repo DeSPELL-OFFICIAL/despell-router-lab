@@ -44,7 +44,7 @@ describe("the circuit gate on the card", () => {
   });
 
   it("adds no line for a pool the server has not judged", () => {
-    expect(serverJudgmentFor(BASE_SEPOLIA.id, BASE_SEPOLIA.pool.key.hooks)).toBeNull();
+    expect(serverJudgmentFor(BASE_SEPOLIA.id, BASE_SEPOLIA.pools[0].key.hooks)).toBeNull();
     expect(circuitLine({ kind: "none" })).toBeNull();
     expect(circuitGate({ kind: "none" })).toEqual({ state: "ok" });
   });
