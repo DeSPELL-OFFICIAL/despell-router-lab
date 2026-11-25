@@ -1,0 +1,42 @@
+{
+  "description": "PoolReflex on Reactive Lasna and PoolGuard on Base Sepolia, watching the test pool in base-sepolia.json",
+  "poolReflex": {
+    "chain": "Reactive Lasna",
+    "chainId": 5318007,
+    "explorer": "https://lasna.reactscan.net",
+    "address": "0x321dB6a8b9eB320c761a8f801FE4757e60f2484A",
+    "deployTx": "0xacd8addee54c22fc24ecebd70737345afe4c0ad206fcd073e2cd00d8123b56fb",
+    "deployBlock": 9237437,
+    "fundedWei": "400000000000000000",
+    "subscription": {
+      "chainId": 84532,
+      "contract": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000",
+      "topic0": "0x96a011a1e8a72dbc16d5af5d8f0db6bf107a76580682a94073bb6ffec86a0872",
+      "topic1": null,
+      "topic2": null,
+      "topic3": null,
+      "filterUid": "0x7652fa58edc50338444941e486cad3b0"
+    },
+    "setGuardTx": "0x990af1eb99fd4b05fb45b6732168c91067695ec3eaf7004c8ea8b888a41727bc",
+    "setGuardBlock": 9237472
+  },
+  "poolGuard": {
+    "chain": "Base Sepolia",
+    "chainId": 84532,
+    "explorer": "https://sepolia.basescan.org",
+    "address": "0xcF269776640D3D19C9c515f3eEAF1DaD53d88378",
+    "deployTx": "0x9f71ffe7042620c4e99ac6d8de11e01c25db1bd315aeb458fad1e21b5c5ec2de",
+    "deployBlock": 63549749,
+    "fundedWei": "500000000000000",
+    "callbackProxy": "0x476F44b11F5C942c58f4c8E3d0300E5710743585",
+    "callbackSender": "0x321dB6a8b9eB320c761a8f801FE4757e60f2484A"
+  },
+  "systemContract": "0x8888888888888888888888888888888888888888",
+  "lreactFaucet": {
+    "chain": "Base Sepolia",
+    "address": "0x2afaFD298b23b62760711756088F75B7409f5967",
+    "tx": "0xcc9a60819dd42e8777959ae5c2733c1d66751208efe40a525d1a9cd90a4a2abe",
+    "block": 63549561,
+    "valueWei": "8000000000000000"
+  }
+}

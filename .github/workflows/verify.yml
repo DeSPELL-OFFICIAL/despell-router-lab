@@ -66,3 +66,49 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+
+      # Contract folders. Foundry is pinned; each folder adds its own steps below.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Cache reactive dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            reactive/lib
+            reactive/reflex/lib
+          key: reactive-lib-${{ hashFiles('reactive/scripts/install-deps.sh') }}
+      - name: reactive · dependencies (pinned in install-deps.sh)
+        run: reactive/scripts/install-deps.sh
+      - name: reactive · forge fmt
+        working-directory: reactive
+        run: forge fmt --check src script test test-fork
+      # Unit tests only. The fork tests (FOUNDRY_PROFILE=fork) need a live Base Sepolia RPC.
+      - name: reactive · forge test
+        working-directory: reactive
+        run: forge test
+      - name: reactive/reflex · forge fmt
+        working-directory: reactive/reflex
+        run: forge fmt --check src script test test-fork
+      - name: reactive/reflex · forge test
+        working-directory: reactive/reflex
+        run: forge test
+      - name: reactive/reflex · report script tests
+        run: node --test reactive/reflex/scripts/*.test.mjs
+
+      - name: Cache xlayer contract dependencies
+        uses: actions/cache@v4
+        with:
+          path: xlayer/contracts/lib
+          key: xlayer-contracts-lib-${{ hashFiles('xlayer/contracts/scripts/install-deps.sh') }}
+      - name: xlayer · dependencies (pinned in install-deps.sh)
+        run: xlayer/contracts/scripts/install-deps.sh
+      - name: xlayer · forge fmt
+        working-directory: xlayer/contracts
+        run: forge fmt --check src script test test-fork
+      # Unit tests only. The fork tests (FOUNDRY_PROFILE=fork) need a live X Layer RPC.
+      - name: xlayer · forge test
+        working-directory: xlayer/contracts
+        run: forge test

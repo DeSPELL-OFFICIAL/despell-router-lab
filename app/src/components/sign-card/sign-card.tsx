@@ -8,9 +8,15 @@ import type { ReactNode } from "react";
   -> one check box -> decision row. Each contest adds rows through `extraRows`
   and its own checks through `check`; nothing else about the card changes.
 
-  The card never moves money by itself. The sign button is whatever the page
-  passes as `action`; without one the card shows a disabled button so the slot
-  is visible before a wallet is connected.
+  The card never moves money by itself, and it alone draws the sign button.
+  A page hands it a `sign` gate (the result of simulating exactly the
+  transactions the button signs, plus the handler); the card enables the
+  button only when `canSign` holds: something leaves and something arrives,
+  that simulation passed, the check box is "ok", and no signature is in
+  flight. A page cannot pass its own sign button. Before a wallet is
+  connected or on the wrong network, `prerequisite` takes the button's place
+  (Connect wallet, Switch network). After signing, `outcome` replaces the
+  decision row with what arrived and the transaction.
 */
 
 export type Amount = {
@@ -35,6 +41,24 @@ export type CardCheck = {
   detail?: ReadonlyArray<readonly [string, string]>;
 };
 
+export type SignGate = {
+  /** Simulation of exactly the transactions this button signs. Only "passed" can enable the button. */
+  simulation: "none" | "pending" | "passed" | "failed";
+  /** A signature or transaction is in flight: the button stays off so it cannot be pressed twice. */
+  busy?: boolean;
+  onSign: () => void;
+};
+
+/** A step the wallet needs before signing makes sense: connect, switch network. */
+export type Prerequisite = { label: string; onClick: () => void; busy?: boolean };
+
+export type Outcome = {
+  /** What arrived, e.g. { amount: "+0.006045", token: "ETH" }. */
+  received: Amount;
+  tx: { hash: string; href: string; label?: string };
+  again?: { label: string; onClick: () => void };
+};
+
 export type SignCardProps = {
   title: string;
   /** Dim text after the title, e.g. "· Base Sepolia". */
@@ -48,11 +72,24 @@ export type SignCardProps = {
   /** Contest-specific rows, rendered after the cost row. */
   extraRows?: ReactNode;
   check?: CardCheck;
-  /** Decision row. Defaults to [Cancel] + a disabled sign button. */
-  action?: ReactNode;
-  /** Label of the default sign button. */
+  /** The sign button's gate. Without it the button is drawn disabled. */
+  sign?: SignGate;
+  /** Replaces the sign button while the wallet is not ready. */
+  prerequisite?: Prerequisite;
+  onCancel?: () => void;
+  /** After signing: what arrived and the transaction, in place of the decision row. */
+  outcome?: Outcome;
+  /** One line under the decision row, e.g. "Declined in your wallet. Nothing was sent." */
+  notice?: ReactNode;
+  /** Label of the sign button. */
   signLabel?: string;
 };
+
+/** The only rule that turns the sign button on. */
+export function canSign(props: Pick<SignCardProps, "sends" | "receives" | "check" | "sign" | "prerequisite" | "outcome">): boolean {
+  const { sends, receives, check, sign, prerequisite, outcome } = props;
+  return Boolean(sends && receives && sign && sign.simulation === "passed" && !sign.busy && check?.tone === "ok" && !prerequisite && !outcome);
+}
 
 function Mark({ token }: { token?: string }) {
   if (!token) return <span className="ds-logo is-empty" aria-hidden="true" />;
@@ -77,7 +114,7 @@ function FlowRow({ k, value, note }: { k: string; value?: ReactNode; note?: Reac
   );
 }
 
-function AmountRow({ k, amount }: { k: string; amount?: Amount }) {
+function AmountRow({ k, amount }: { k: string; amount?: Amount | null }) {
   if (!amount) {
     return (
       <div className="ds-flow" data-row={k.toLowerCase()}>
@@ -194,8 +231,55 @@ function CheckBox({ check }: { check?: CardCheck }) {
   );
 }
 
+function Decision({ props }: { props: SignCardProps }) {
+  const { sign, prerequisite, onCancel, signLabel = "Sign" } = props;
+  const enabled = canSign(props);
+  return (
+    <div className="ds-actions" data-row="actions">
+      <button type="button" className="ds-btn is-lg is-secondary" disabled={!onCancel || sign?.busy} onClick={onCancel}>
+        Cancel
+      </button>
+      {prerequisite ? (
+        <button type="button" className="ds-btn is-lg is-primary" data-action="prerequisite" disabled={prerequisite.busy} onClick={prerequisite.onClick}>
+          {prerequisite.label}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="ds-btn is-lg is-primary"
+          data-action="sign"
+          disabled={!enabled}
+          aria-busy={sign?.busy || undefined}
+          // The handler that runs must re-check the latest state itself (useSwap's sign() does: plan,
+          // simulation, chain, hold, in-flight) and simulate again before sending. No handler at all
+          // without a gate, so the card still renders from a Server Component.
+          onClick={sign && enabled ? sign.onSign : undefined}
+        >
+          {signLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OutcomeRows({ outcome }: { outcome: Outcome }) {
+  return (
+    <>
+      <AmountRow k="Received" amount={outcome.received} />
+      <FlowRow
+        k="Tx"
+        value={
+          <a className="ds-mono" href={outcome.tx.href} target="_blank" rel="noreferrer">
+            {outcome.tx.label ?? `${outcome.tx.hash.slice(0, 10)}…${outcome.tx.hash.slice(-8)}`}
+          </a>
+        }
+      />
+    </>
+  );
+}
+
 export function SignCard(props: SignCardProps) {
-  const { title, scope, meta, sends, receives, route, cost, extraRows, check, action, signLabel = "Sign" } = props;
+  const { title, scope, meta, sends, receives, route, cost, extraRows, check, outcome, notice } = props;
   return (
     <section className="ds-card" aria-label={`${title} signing card`}>
       <div className="ds-card-head">
@@ -211,17 +295,24 @@ export function SignCard(props: SignCardProps) {
         <FlowRow k="Route" value={route?.label} note={route?.note} />
         <CostFold cost={cost} />
         {extraRows}
+        {outcome && <OutcomeRows outcome={outcome} />}
       </div>
       <CheckBox check={check} />
-      {action ?? (
-        <div className="ds-actions" data-row="actions">
-          <button type="button" className="ds-btn is-lg is-secondary" disabled>
-            Cancel
-          </button>
-          <button type="button" className="ds-btn is-lg is-primary" disabled>
-            {signLabel}
-          </button>
-        </div>
+      {outcome ? (
+        outcome.again && (
+          <div className="ds-actions" data-row="actions">
+            <button type="button" className="ds-btn is-lg is-secondary" onClick={outcome.again.onClick}>
+              {outcome.again.label}
+            </button>
+          </div>
+        )
+      ) : (
+        <Decision props={props} />
+      )}
+      {notice && (
+        <p className="ds-footline" role="status">
+          {notice}
+        </p>
       )}
     </section>
   );
