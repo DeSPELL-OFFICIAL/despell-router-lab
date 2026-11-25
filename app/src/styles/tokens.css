@@ -1,0 +1,172 @@
+/*
+  DeSpell design tokens for the router lab.
+
+  Source: the DeSpell unified design file, tokens.css v1.0. The dark values are
+  that file's values unchanged; the product itself is dark only. The light set
+  is new here: the same names, chosen so every card part keeps its contrast.
+
+  Components read only --ds-* names. A theme applies to the element that
+  carries data-theme and everything inside it, so a page can show both themes
+  side by side (see /card).
+*/
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --ds-bg: #0a0a0a;
+  --ds-surface: #141414;
+  --ds-surface-track: #1a1a1a;
+  --ds-surface-pop: #161616;
+  --ds-fill-step: color-mix(in srgb, #f9f9f9 3.5%, #0a0a0a);
+  --ds-fill-ask: #121212;
+  --ds-glass: rgba(146, 146, 146, 0.06);
+  --ds-glass-strong: rgba(17, 17, 17, 0.5);
+  --ds-glass-card: linear-gradient(150deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.02));
+  --ds-tint-1: rgba(255, 255, 255, 0.03);
+  --ds-tint-2: rgba(255, 255, 255, 0.05);
+  --ds-ambient:
+    radial-gradient(835px 835px at 6% -10%, rgba(229, 255, 93, 0.06), transparent 60%),
+    radial-gradient(662px 662px at 110% 112%, rgba(229, 255, 93, 0.045), transparent 55%);
+
+  /* text */
+  --ds-fg: #f9f9f9;
+  --ds-fg-bright: #ffffff;
+  --ds-fg-dim: rgba(138, 138, 138, 0.9);
+  --ds-fg-chip: #cfcfcf;
+  --ds-wordmark: #f0ebe3;
+
+  /* lines: a white alpha ladder */
+  --ds-line-1: rgba(255, 255, 255, 0.06);
+  --ds-line-2: rgba(255, 255, 255, 0.08);
+  --ds-line-3: rgba(255, 255, 255, 0.1);
+  --ds-line-4: rgba(255, 255, 255, 0.14);
+  --ds-line-5: rgba(255, 255, 255, 0.18);
+  --ds-line-hover: rgba(255, 255, 255, 0.28);
+
+  /* accent (lime). --ds-accent-ink is accent used as text on the page background. */
+  --ds-accent: #e5ff5d;
+  --ds-accent-ink: #e5ff5d;
+  --ds-on-accent: #0a0a0a;
+  --ds-accent-a06: rgba(229, 255, 93, 0.06);
+  --ds-accent-a08: rgba(229, 255, 93, 0.08);
+  --ds-accent-a14: rgba(229, 255, 93, 0.14);
+  --ds-accent-a40: rgba(229, 255, 93, 0.4);
+  --ds-accent-glow: 0 0 24px rgba(229, 255, 93, 0.25);
+
+  /* meaning */
+  --ds-danger: #ff5c5c;
+  --ds-danger-soft: #ff8a8a;
+  --ds-warn: #ffd60a;
+  --ds-ok: #86efac;
+
+  /* elevation */
+  --ds-shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --ds-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --ds-blur-header: blur(12px) saturate(140%);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --ds-bg: #f6f6f2;
+  --ds-surface: #ffffff;
+  --ds-surface-track: #ebebe6;
+  --ds-surface-pop: #ffffff;
+  --ds-fill-step: #ffffff;
+  --ds-fill-ask: #fbfbf8;
+  --ds-glass: rgba(20, 20, 20, 0.03);
+  --ds-glass-strong: rgba(246, 246, 242, 0.75);
+  --ds-glass-card: linear-gradient(150deg, #ffffff, #fafaf6);
+  --ds-tint-1: rgba(0, 0, 0, 0.025);
+  --ds-tint-2: rgba(0, 0, 0, 0.04);
+  --ds-ambient:
+    radial-gradient(835px 835px at 6% -10%, rgba(196, 230, 30, 0.12), transparent 60%),
+    radial-gradient(662px 662px at 110% 112%, rgba(196, 230, 30, 0.08), transparent 55%);
+
+  --ds-fg: #1c1c1a;
+  --ds-fg-bright: #0a0a0a;
+  --ds-fg-dim: rgba(84, 84, 78, 0.92);
+  --ds-fg-chip: #3d3d39;
+  --ds-wordmark: #1c1c1a;
+
+  --ds-line-1: rgba(0, 0, 0, 0.06);
+  --ds-line-2: rgba(0, 0, 0, 0.08);
+  --ds-line-3: rgba(0, 0, 0, 0.1);
+  --ds-line-4: rgba(0, 0, 0, 0.14);
+  --ds-line-5: rgba(0, 0, 0, 0.2);
+  --ds-line-hover: rgba(0, 0, 0, 0.32);
+
+  /* Lime stays the fill colour; as text it darkens to olive so it stays readable. */
+  --ds-accent: #e5ff5d;
+  --ds-accent-ink: #5a6e00;
+  --ds-on-accent: #0a0a0a;
+  --ds-accent-a06: rgba(140, 170, 0, 0.06);
+  --ds-accent-a08: rgba(140, 170, 0, 0.08);
+  --ds-accent-a14: rgba(140, 170, 0, 0.14);
+  --ds-accent-a40: rgba(110, 135, 0, 0.45);
+  --ds-accent-glow: 0 0 0 3px rgba(140, 170, 0, 0.18);
+
+  --ds-danger: #d92d2d;
+  --ds-danger-soft: #c43c3c;
+  --ds-warn: #a66f00;
+  --ds-ok: #2e8a4f;
+
+  --ds-shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --ds-shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --ds-blur-header: blur(12px) saturate(140%);
+}
+
+/* Theme-independent scales. */
+:root {
+  --ds-font: var(--font-geist-sans), "Helvetica Neue", system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --ds-font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  --ds-text-2xs: 10px;
+  --ds-text-xs: 11px;
+  --ds-text-sm: 12px;
+  --ds-text-btn: 12.5px;
+  --ds-text-row: 13px;
+  --ds-text-md: 14px;
+  --ds-text-base: 15px;
+  --ds-text-lg: 20px;
+  --ds-text-xl: 26px;
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-semibold: 600;
+  --ds-leading-tight: 1.3;
+  --ds-leading: 1.45;
+  --ds-leading-loose: 1.5;
+
+  --ds-space-1: 4px;
+  --ds-space-2: 6px;
+  --ds-space-3: 8px;
+  --ds-space-4: 10px;
+  --ds-space-5: 12px;
+  --ds-space-6: 16px;
+  --ds-space-7: 20px;
+  --ds-space-8: 24px;
+  --ds-space-9: 32px;
+
+  --ds-r-check: 4px;
+  --ds-r-sm: 6px;
+  --ds-r-md: 8px;
+  --ds-r-lg: 10px;
+  --ds-r-card: 12px;
+  --ds-r-step: 14px;
+  --ds-r-sheet: 16px;
+  --ds-r-pill: 999px;
+
+  --ds-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ds-ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-dur-line: 140ms;
+  --ds-dur-tap: 160ms;
+
+  --ds-header-h: 64px;
+  --ds-column-w: 672px;
+  --ds-card-w: 480px;
+  --ds-hit: 36px;
+  --ds-hit-lg: 40px;
+  --ds-logo-md: 22px;
+}
