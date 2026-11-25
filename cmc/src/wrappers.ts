@@ -3,7 +3,7 @@
 // /v2/cryptocurrency/info lists under `contract_address`. A "wrapper" here is
 // one token on one chain, because that is what a buyer actually routes into.
 
-import { chainForPlatform } from "./chains.ts";
+import { chainForPlatform, type ChainKind } from "./chains.ts";
 import type { CryptoInfoData, RwaAssetQuote } from "./cmc.ts";
 
 export interface Wrapper {
@@ -16,13 +16,13 @@ export interface Wrapper {
   cmcMarketCapUsd: number | null;
   chainName: string;
   chainId: number | null;
-  evm: boolean;
+  chainKind: ChainKind;
   address: string;
 }
 
 export function groupWrappers(asset: RwaAssetQuote, info: CryptoInfoData): Wrapper[] {
   const out: Wrapper[] = [];
-  for (const token of asset.tokens) {
+  for (const token of asset.tokens ?? []) {
     const meta = info[String(token.crypto_id)];
     // Tokens without any contract address (for example CMC's derivatives
     // index entry) are not something a wallet can buy.
@@ -38,7 +38,7 @@ export function groupWrappers(asset: RwaAssetQuote, info: CryptoInfoData): Wrapp
         cmcMarketCapUsd: token.market_cap,
         chainName: d.platform.name,
         chainId: chain.chainId,
-        evm: chain.evm,
+        chainKind: chain.kind,
         address: d.contract_address,
       });
     }

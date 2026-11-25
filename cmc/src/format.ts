@@ -2,8 +2,21 @@
 
 import type { CompareResult } from "./compare.ts";
 
-const usd = (v: number | null) => (v == null ? "-" : `$${v.toFixed(2)}`);
-const pct = (v: number | null) => (v == null ? "-" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
+// Round first so -0.001 prints as 0.00 with no stray minus sign.
+const round2 = (v: number) => {
+  const r = Math.round(v * 100) / 100;
+  return r === 0 ? 0 : r;
+};
+const usd = (v: number | null) => {
+  if (v == null) return "-";
+  const r = round2(v);
+  return `${r < 0 ? "-" : ""}$${Math.abs(r).toFixed(2)}`;
+};
+const pct = (v: number | null) => {
+  if (v == null) return "-";
+  const r = round2(v);
+  return `${r < 0 ? "-" : "+"}${Math.abs(r).toFixed(2)}%`;
+};
 
 export function formatTable(result: CompareResult): string {
   const head = [
@@ -24,5 +37,13 @@ export function formatTable(result: CompareResult): string {
   ]);
   const widths = cols.map((c, i) => Math.max(c.length, ...body.map((row) => row[i]!.length)));
   const line = (row: string[]) => row.map((cell, i) => cell.padEnd(widths[i]!)).join("  ").trimEnd();
-  return [...head, "", line(cols), ...body.map(line)].join("\n");
+
+  // Rows left out for reasons that may hide a better wrapper are spelled out.
+  const notes = result.rows
+    .filter((r) => r.unavailable === "quote_failed" || r.unavailable === "implausible_quote")
+    .map((r) => `! ${r.wrapper.symbol} on ${r.wrapper.chainName}: ${r.unavailable}${r.unavailableDetail ? ` (${r.unavailableDetail})` : ""}`);
+  if (result.rows.some((r) => r.unavailable === "quote_failed")) {
+    notes.unshift("! Some quotes failed, so a wrapper that receives more may be missing from the ranking.");
+  }
+  return [...head, "", line(cols), ...body.map(line), ...(notes.length ? ["", ...notes] : [])].join("\n");
 }

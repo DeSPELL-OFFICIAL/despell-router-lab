@@ -16,7 +16,12 @@ const flag = (name: string) => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 const symbol = args.find((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--")) ?? "NVDA";
-const spendUsd = Number(flag("--spend") ?? 100);
+const spendArg = flag("--spend") ?? "100";
+if (!/^\d+(\.\d+)?$/.test(spendArg)) {
+  console.error(`--spend must be a plain decimal amount in USD, got ${spendArg}`);
+  process.exit(1);
+}
+const spendUsd = Number(spendArg);
 const jsonOut = flag("--json");
 
 const apiKey = process.env.CMC_PRO_API_KEY;

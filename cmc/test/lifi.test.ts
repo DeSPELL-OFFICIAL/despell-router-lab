@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createLifiQuoter, NoRouteError, parseLifiQuote, UnsupportedChainError } from "../src/lifi.ts";
+import { createLifiQuoter, NoRouteError, parseLifiQuote, QuoteFailedError, UnsupportedChainError } from "../src/lifi.ts";
 import { fakeFetch, lifiQuoteNvdax } from "./helpers.ts";
 
 // NVDAx (Backed xStock) contract, same address on Ethereum and BNB Smart Chain.
@@ -11,7 +11,19 @@ test("a recorded LI.FI quote parses into tokens out, gas and fees", () => {
   assert.equal(q.tokensOut, 0.685596148960855662);
   assert.equal(q.gasUsd, 0.2191);
   assert.equal(q.feeUsd, 0.2506);
+  assert.equal(q.extraFeeUsd, 0);
   assert.equal(q.tool, "lifiIntentsDex");
+});
+
+test("fees with included:false are paid on top and kept apart", () => {
+  const body = lifiQuoteNvdax();
+  body.estimate!.feeCosts = [
+    { amountUSD: "0.25", included: true },
+    { amountUSD: "1.50", included: false },
+  ];
+  const q = parseLifiQuote(body);
+  assert.equal(q.feeUsd, 0.25);
+  assert.equal(q.extraFeeUsd, 1.5);
 });
 
 test("the quoter pays exact USDC base units on the same chain", async () => {
@@ -28,17 +40,30 @@ test("the quoter pays exact USDC base units on the same chain", async () => {
   // USDC on BNB Smart Chain has 18 decimals.
   await quote({ chainId: 56, tokenAddress: NVDAX, spendUsd: 100 });
   assert.equal(f.seen[1]!.url.searchParams.get("fromAmount"), "100000000000000000000");
+
+  await quote({ chainId: 1, tokenAddress: NVDAX, spendUsd: 0.1 + 0.2 });
+  assert.equal(f.seen[2]!.url.searchParams.get("fromAmount"), "300000");
 });
 
-test("chains without a pay token and failed quotes are typed errors", async () => {
-  const f = fakeFetch({ "/v1/quote": { status: 404, body: { message: "No available quotes for the requested transfer" } } });
-  const quote = createLifiQuoter({ fetch: f.fetch });
-
-  await assert.rejects(quote({ chainId: 424242, tokenAddress: "0x1", spendUsd: 100 }), UnsupportedChainError);
-  await assert.rejects(quote({ chainId: 1, tokenAddress: "0x1", spendUsd: 100 }), (err: unknown) => {
+test("404 means no route; other failures mean the quote failed", async () => {
+  const notFound = fakeFetch({ "/v1/quote": { status: 404, body: { message: "No available quotes for the requested transfer" } } });
+  await assert.rejects(createLifiQuoter({ fetch: notFound.fetch })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 }), (err: unknown) => {
     assert.ok(err instanceof NoRouteError);
     assert.match(err.message, /No available quotes/);
     return true;
   });
-  assert.throws(() => parseLifiQuote({}), NoRouteError);
+
+  const limited = fakeFetch({ "/v1/quote": { status: 429, body: { message: "Rate limit exceeded" } } });
+  await assert.rejects(
+    createLifiQuoter({ fetch: limited.fetch })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 }),
+    (err: unknown) => err instanceof QuoteFailedError && /429/.test(err.message),
+  );
+
+  const offline = (async () => {
+    throw new TypeError("fetch failed");
+  }) as typeof fetch;
+  await assert.rejects(createLifiQuoter({ fetch: offline })({ chainId: 1, tokenAddress: NVDAX, spendUsd: 100 }), QuoteFailedError);
+
+  await assert.rejects(createLifiQuoter({ fetch: notFound.fetch })({ chainId: 424242, tokenAddress: NVDAX, spendUsd: 100 }), UnsupportedChainError);
+  assert.throws(() => parseLifiQuote({}), QuoteFailedError);
 });

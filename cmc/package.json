@@ -9,6 +9,11 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.ts\"",
-    "compare": "node scripts/compare-live.ts"
+    "compare": "node scripts/compare-live.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
   }
 }

@@ -44,7 +44,8 @@ export interface RwaAssetQuote {
   tokenized_market_cap: number | null;
   tokenized_volume_24h: number | null;
   last_updated: string;
-  tokens: RwaToken[];
+  /** May be empty, or missing, when the asset has no tokenized representation. */
+  tokens?: RwaToken[];
 }
 
 export interface RwaQuotesLatestData {

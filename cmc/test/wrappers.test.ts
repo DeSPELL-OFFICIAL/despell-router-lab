@@ -31,11 +31,11 @@ test("chains map to EVM chain ids, and non-EVM chains are flagged", () => {
   assert.equal(find("NVDAc", "Base").issuer, "Coinbase");
 
   const solana = find("NVDAX", "Solana");
-  assert.equal(solana.evm, false);
+  assert.equal(solana.chainKind, "non_evm");
   assert.equal(solana.chainId, null);
 
   const robinhood = find("NVDAon", "Robinhood Chain");
-  assert.equal(robinhood.evm, true);
+  assert.equal(robinhood.chainKind, "evm");
   assert.equal(robinhood.chainId, null);
 });
 
@@ -43,4 +43,18 @@ test("a token CMC has no price for keeps a null price", () => {
   const dinari = groupWrappers(asset(), info()).find((w) => w.symbol === "NVDA.D")!;
   assert.equal(dinari.cmcPriceUsd, null);
   assert.equal(dinari.chainId, 42161);
+});
+
+test("a chain name CMC uses that is not in the table is unknown, not non-EVM", () => {
+  const info = cryptoInfoNvda().data!;
+  info["42461"]!.contract_address![0]!.platform.name = "Some New L2";
+  const w = groupWrappers(asset(), info).find((x) => x.symbol === "NVDAc")!;
+  assert.equal(w.chainKind, "unknown");
+  assert.equal(w.chainId, null);
+});
+
+test("an asset without a tokens array gives no wrappers", () => {
+  const a = asset();
+  delete a.tokens;
+  assert.deepEqual(groupWrappers(a, info()), []);
 });

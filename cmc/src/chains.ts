@@ -1,38 +1,38 @@
 // CoinMarketCap names chains by platform name. Route quotes need EVM chain ids
 // and a USDC to pay with on that chain.
 
+export type ChainKind = "evm" | "non_evm" | "unknown";
+
 export interface ChainInfo {
-  /** EVM chain id, or null when the chain is not EVM or not known here. */
+  /** EVM chain id, or null when the chain is not EVM or not wired here. */
   chainId: number | null;
-  evm: boolean;
+  kind: ChainKind;
 }
 
 // Keyed by CMC `contract_address[].platform.name`, as returned by
 // /v2/cryptocurrency/info.
 const PLATFORMS: Record<string, ChainInfo> = {
-  "Ethereum": { chainId: 1, evm: true },
-  "BNB Smart Chain (BEP20)": { chainId: 56, evm: true },
-  "Arbitrum": { chainId: 42161, evm: true },
-  "Base": { chainId: 8453, evm: true },
-  "Polygon": { chainId: 137, evm: true },
-  "Optimism": { chainId: 10, evm: true },
-  "Avalanche C-Chain": { chainId: 43114, evm: true },
-  "Ink": { chainId: 57073, evm: true },
-  "X Layer": { chainId: 196, evm: true },
-  "HyperEVM": { chainId: 999, evm: true },
-  "Mantle": { chainId: 5000, evm: true },
+  "Ethereum": { chainId: 1, kind: "evm" },
+  "BNB Smart Chain (BEP20)": { chainId: 56, kind: "evm" },
+  "Arbitrum": { chainId: 42161, kind: "evm" },
+  "Base": { chainId: 8453, kind: "evm" },
+  "Polygon": { chainId: 137, kind: "evm" },
+  "Optimism": { chainId: 10, kind: "evm" },
+  "Avalanche C-Chain": { chainId: 43114, kind: "evm" },
+  "Ink": { chainId: 57073, kind: "evm" },
+  "X Layer": { chainId: 196, kind: "evm" },
+  "HyperEVM": { chainId: 999, kind: "evm" },
   // EVM, but no public route quote source is wired for it yet.
-  "Robinhood Chain": { chainId: null, evm: true },
-  "Solana": { chainId: null, evm: false },
-  "TON": { chainId: null, evm: false },
-  "Tron20": { chainId: null, evm: false },
+  "Robinhood Chain": { chainId: null, kind: "evm" },
+  "Solana": { chainId: null, kind: "non_evm" },
+  "TON": { chainId: null, kind: "non_evm" },
+  "Tron20": { chainId: null, kind: "non_evm" },
 };
 
 export function chainForPlatform(platformName: string): ChainInfo {
-  const known = PLATFORMS[platformName];
-  if (known) return known;
-  // Unknown names are treated as unsupported rather than guessed.
-  return { chainId: null, evm: false };
+  // Names not listed are not guessed as EVM or non-EVM; they are reported as
+  // an unsupported chain until someone adds them here.
+  return PLATFORMS[platformName] ?? { chainId: null, kind: "unknown" };
 }
 
 export interface PayToken {
@@ -40,7 +40,11 @@ export interface PayToken {
   decimals: number;
 }
 
-/** Native USDC per chain, used as the "pay $100 with" token for quotes. */
+/**
+ * The USDC used as "pay $100 with" on each chain. Circle-native USDC where it
+ * exists; on BNB Smart Chain it is Binance-Peg USDC (18 decimals), and on
+ * X Layer a bridged USDC, so the spend there is only as good as that peg.
+ */
 export const USDC: Record<number, PayToken> = {
   1: { address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", decimals: 6 },
   56: { address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", decimals: 18 },

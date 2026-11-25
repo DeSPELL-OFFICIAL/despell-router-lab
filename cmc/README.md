@@ -15,20 +15,29 @@ For each wrapper, with `ref` = the reference price of the stock and `p` = the wr
 
 | Field | Formula |
 | --- | --- |
+| on top | `gas + fees charged on top of the spend` (LI.FI `included: false`) |
 | premium | `(p / ref - 1) * 100` |
-| route cost | `$100 - tokensOut * p + gas` (DEX fees and price impact, plus gas) |
-| receives | `tokensOut * ref - gas` (the stock exposure you hold, net of gas) |
+| route cost | `$100 - tokensOut * p + on top` (DEX fees and price impact, plus what is paid on top) |
+| receives | `tokensOut * ref - on top` (the stock exposure you hold, net of what is paid on top) |
 
 `ref` defaults to CMC's `average_tokenized_price` for the asset, because the RWA endpoints do not return the exchange-listed stock price. Pass `referencePriceUsd` to use another one. One token is taken as one share.
 
-Wrappers on chains without a route are kept and listed last, with the reason: `non_evm_chain` (Solana, TON), `unsupported_chain` (EVM, but no quote source wired yet) or `no_route` (the quote API had no route).
+Wrappers that cannot be ranked are kept and listed last, with the reason:
+
+| Reason | Meaning |
+| --- | --- |
+| `non_evm_chain` | Solana, TON: no EVM route quote |
+| `unsupported_chain` | EVM or unrecognised chain with no quote source wired yet |
+| `no_route` | LI.FI answered 404: no route for this pair |
+| `quote_failed` | rate limit, server error or network drop; the table warns, since a better wrapper may be missing |
+| `implausible_quote` | CMC price more than 20% off the stock (not 1 token = 1 share), or the quoted tokens are worth more than 20% off the spend (bad decimals) |
 
 ## Use
 
-Node 24 runs the TypeScript directly; there are no dependencies.
+Node 24 runs the TypeScript directly; there are no runtime dependencies. TypeScript is a dev dependency, only for `pnpm typecheck`.
 
 ```bash
-pnpm test                                   # fixtures only, no network
+pnpm install && pnpm test && pnpm typecheck # fixtures only, no network
 CMC_PRO_API_KEY=... pnpm compare NVDA       # live: CoinMarketCap + LI.FI
 node --env-file=<a file outside this repo> scripts/compare-live.ts NVDA --json out.json
 ```

@@ -3,12 +3,12 @@ import { test } from "node:test";
 import { createCmcClient } from "../src/cmc.ts";
 import { compareWrappers } from "../src/compare.ts";
 import { formatTable } from "../src/format.ts";
-import { NoRouteError, type RouteQuoter } from "../src/lifi.ts";
+import { NoRouteError, QuoteFailedError, type RouteQuoter } from "../src/lifi.ts";
 import { cryptoInfoNvda, fakeFetch, rwaQuotesNvda } from "./helpers.ts";
 
-const cmcFixtures = () => {
+const cmcFixtures = (quotesBody: unknown = rwaQuotesNvda()) => {
   const f = fakeFetch({
-    "/v5/real-world-assets/quotes/latest": { body: rwaQuotesNvda() },
+    "/v5/real-world-assets/quotes/latest": { body: quotesBody },
     "/v2/cryptocurrency/info": { body: cryptoInfoNvda() },
   });
   return createCmcClient({ apiKey: "test-key-not-real", fetch: f.fetch });
@@ -24,7 +24,7 @@ const fakeQuoter = (overrides: Record<string, number> = {}): { quoter: RouteQuot
     asked.push(key);
     if (key === "42161:0x4dafffddea93ddf1e0e7b61e844331455053ce5c") throw new NoRouteError("No available quotes");
     const tokensOut = overrides[key] ?? 0.69;
-    return { tokensOut, gasUsd: GAS_BY_CHAIN[chainId] ?? 0.05, feeUsd: 0.25, tool: "fake", source: "lifi" };
+    return { tokensOut, gasUsd: GAS_BY_CHAIN[chainId] ?? 0.05, extraFeeUsd: 0, feeUsd: 0.25, tool: "fake", source: "lifi" };
   };
   return { quoter, asked };
 };
@@ -90,4 +90,50 @@ test("a given reference price replaces the CMC tokenized average", async () => {
   assert.equal(result.spendUsd, 50);
   const nvdac = result.rows.find((r) => r.wrapper.symbol === "NVDAc")!;
   assert.ok(Math.abs(nvdac.premiumPct! - (142.79707847961018 / 150 - 1) * 100) < 1e-9);
+});
+
+test("a failed quote is kept apart from no route, and the table warns about it", async () => {
+  const { quoter } = fakeQuoter();
+  const flaky: RouteQuoter = async (req) => {
+    if (req.chainId === 8453) throw new QuoteFailedError("LI.FI HTTP 429: Rate limit exceeded");
+    return quoter(req);
+  };
+  const result = await compareWrappers({ cmc: cmcFixtures(), quoter: flaky, symbol: "NVDA" });
+  const nvdac = result.rows.find((r) => r.wrapper.symbol === "NVDAc")!;
+  assert.equal(nvdac.unavailable, "quote_failed");
+  const table = formatTable(result);
+  assert.match(table, /Some quotes failed/);
+  assert.match(table, /NVDAc on Base: quote_failed \(LI\.FI HTTP 429/);
+});
+
+test("the asset must match the ticker exactly", async () => {
+  const body = rwaQuotesNvda();
+  body.data!.rwa_assets[0]!.symbol = "NVDL";
+  const { quoter } = fakeQuoter();
+  await assert.rejects(compareWrappers({ cmc: cmcFixtures(body), quoter, symbol: "NVDA" }), /no RWA asset with symbol NVDA \(got NVDL\)/);
+  // Case does not matter.
+  const ok = await compareWrappers({ cmc: cmcFixtures(), quoter, symbol: "nvda" });
+  assert.equal(ok.asset.symbol, "NVDA");
+});
+
+test("an asset with no tokens is a clear error", async () => {
+  const body = rwaQuotesNvda();
+  const a = body.data!.rwa_assets[0]!;
+  a.has_tokens = false;
+  delete a.tokens;
+  const { quoter } = fakeQuoter();
+  await assert.rejects(compareWrappers({ cmc: cmcFixtures(body), quoter, symbol: "NVDA" }), /no tokenized wrappers/);
+});
+
+test("bad spend, concurrency and reference values are refused before any call", async () => {
+  const { quoter, asked } = fakeQuoter();
+  const cmc = cmcFixtures();
+  for (const spendUsd of [Number.NaN, 0, -5, 1e21]) {
+    await assert.rejects(compareWrappers({ cmc, quoter, symbol: "NVDA", spendUsd }), /spend must be/);
+  }
+  for (const concurrency of [Number.NaN, 0, 1.5]) {
+    await assert.rejects(compareWrappers({ cmc, quoter, symbol: "NVDA", concurrency }), /concurrency must be/);
+  }
+  await assert.rejects(compareWrappers({ cmc, quoter, symbol: "NVDA", referencePriceUsd: -1 }), /reference price/);
+  assert.equal(asked.length, 0);
 });
