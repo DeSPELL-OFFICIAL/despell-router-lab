@@ -1,0 +1,21 @@
+{
+  "name": "@despell-lab/xlayer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The DeSpell router's pool judgment rules as a TapeOut NAND circuit for X Layer.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build:circuit": "node scripts/build-circuit.ts",
+    "check:circuit": "node scripts/build-circuit.ts --check",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.4",
+    "typescript": "^5.9.3"
+  }
+}
