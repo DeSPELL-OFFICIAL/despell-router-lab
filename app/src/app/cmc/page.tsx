@@ -42,7 +42,12 @@ export default async function Page() {
         </div>
       )}
       {measured.kind === "screen" && (
-        <WrapperList screen={measured.screen} connectorHost={measured.target.host} production={measured.target.production} />
+        <WrapperList
+          screen={measured.screen}
+          connectorHost={measured.target.host}
+          production={measured.target.production}
+          backingOffUntil={measured.backingOffUntil}
+        />
       )}
     </main>
   );
