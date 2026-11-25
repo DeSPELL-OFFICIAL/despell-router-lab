@@ -4,9 +4,9 @@ When a pool the DeSpell router might use changes a setting, the router tightens 
 review. Today a server patrol does this and can take up to 60 seconds. This folder moves the reflex on-chain:
 
 1. **A test pool whose setting can change** — a Uniswap v4 ETH/USDC pool on Base Sepolia with our hook. Changing
-   its fee emits one `FeeUpdated` event. *(this part, DES-695)*
+   its fee emits one `FeeUpdated` event. *(`src/`, live)*
 2. A Reactive contract on Reactive Lasna that hears `FeeUpdated` and, through a callback, marks the pool as
-   narrowed on a `PoolGuard` contract on Base Sepolia. Anyone reads the mark with `statusOf(pool)`. *(next, DES-698)*
+   narrowed on a `PoolGuard` contract on Base Sepolia. Anyone reads the mark with `statusOf(pool)`. *(`reflex/`)*
 
 Marks only tighten, and nothing here moves anyone's money.
 
@@ -89,12 +89,68 @@ after someone has bought ETH from it. The pool is small: quotes are good up to a
     uses 500 and its source stays as deployed, so the bytecode can be rebuilt from this repository. If it is ever
     redeployed, make the constructor reject 0.
 
+## The reflex: PoolReflex and PoolGuard (`reflex/`)
+
+```
+Base Sepolia                     Reactive Lasna                         Base Sepolia
+hook emits FeeUpdated  ───────►  PoolReflex.react()  ── callback ──►   PoolGuard.mark()  →  statusOf(poolId) = 2
+(pool id, 500 → 100000)          reflex table: fee_changed → 2          via Reactive's callback proxy
+```
+
+- **`PoolReflex`** (Reactive Lasna, built on `reactive-lib-omni`) subscribes to exactly one thing: `FeeUpdated` from
+  the hook above, on Base Sepolia. Its `react()` looks the change up in the router's reflex table and asks, through
+  `requestCallbackV_1_0`, for PoolGuard to mark the pool. It never asks for anything looser.
+- **`PoolGuard`** (Base Sepolia) accepts `mark` only from Reactive's callback proxy, and only on behalf of PoolReflex
+  (the proxy writes the requesting contract's address into the first argument). Anyone reads
+  `statusOf(poolId)` or `markOf(poolId)`.
+
+| Status | Meaning in the router |
+| --- | --- |
+| 0 | open |
+| 1 | small cap |
+| 2 | narrowed: the router caps the pool at 0.1x its usual limit |
+| 3 | blocked |
+
+The rules it keeps:
+
+- Marks only tighten. A callback asking for the same or a looser status changes nothing (`MarkKept`), and an unknown
+  status is read as blocked.
+- Flipping the setting back does not reopen a pool: `500 → 100000` and then `100000 → 500` leaves it narrowed.
+- Only the owner reopens (`reopen(poolId)`): the server, after the pool's test trades pass again.
+- A pool created on the hook after PoolReflex subscribed reports its first fee as `0 → initialFee`, so it starts
+  narrowed until it is tested and reopened, the router's rule for untested pools.
+- Neither contract moves anyone's money. PoolGuard's ETH pays the callback proxy's fees; PoolReflex's lREACT pays for
+  reactive transactions. Testnet limits: `setGuard` works once, and neither contract has a withdraw, so leftover
+  test funds stay in them.
+
+The reflex table is the router's, change kind by change kind: code, token code, implementation or failed-sell
+changes block (3); owner, fee, reserve or round-trip-loss changes narrow (2); `paused` and `stale` do not mark. The
+test pool can only change its fee, so only `fee_changed` is wired to an event.
+
+`reflex/` is its own Foundry project: `reactive-lib-omni` needs solc ^0.8.29, while the hook above stays on 0.8.26 so
+its deployed bytecode can be rebuilt.
+
+| Script (`reflex/`) | Does | Chain |
+| --- | --- | --- |
+| `script/GetLreact.s.sol` | Buys lREACT with Base Sepolia ETH through Reactive's faucet | Base Sepolia |
+| `script/DeployReflex.s.sol` | Deploys and funds PoolReflex (subscribes in its constructor) | Lasna |
+| `script/DeployGuard.s.sol` | Deploys and funds PoolGuard, accepting marks from PoolReflex only | Base Sepolia |
+| `script/SetGuard.s.sol` | Points PoolReflex at PoolGuard, once | Lasna |
+| `script/Reopen.s.sol` | The owner reopens the test pool | Base Sepolia |
+| `scripts/measure.mjs` | Changes the fee, waits for the mark, records the three transactions, reopens, repeats | both |
+| `scripts/report.mjs` | Turns a measurement into `deployments/reflex-page.json` and this README's latency table (no key) | — |
+
 ## Build and test
 
 ```sh
-scripts/install-deps.sh               # forge-std + OpenZeppelin uniswap-hooks (with v4-core, v4-periphery) at pinned commits
+scripts/install-deps.sh               # pinned: forge-std, OpenZeppelin uniswap-hooks (v4-core, v4-periphery), reactive-lib-omni
 forge test                            # unit tests on a local PoolManager
 FOUNDRY_PROFILE=fork forge test       # runs the scripts below against Uniswap's real Base Sepolia contracts (needs network)
+
+cd reflex
+forge test                            # PoolGuard and PoolReflex rules, and the whole loop with a stand-in system contract and proxy
+FOUNDRY_PROFILE=fork forge test       # the real hook on Base Sepolia, and Lasna's real system contract (needs network)
+node --test scripts/*.test.mjs        # the report builder
 ```
 
 The root of this repository has no git submodules (other folders share it), so the dependency pins live in

@@ -95,3 +95,5 @@ jobs:
       - name: reactive/reflex · forge test
         working-directory: reactive/reflex
         run: forge test
+      - name: reactive/reflex · report script tests
+        run: node --test reactive/reflex/scripts/*.test.mjs
