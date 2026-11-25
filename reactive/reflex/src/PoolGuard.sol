@@ -91,7 +91,7 @@ contract PoolGuard is AbstractCallback {
         }
         m.status = status;
         m.markedAt = uint64(block.timestamp);
-        m.originBlock = uint64(originBlock);
+        m.originBlock = originBlock > type(uint64).max ? type(uint64).max : uint64(originBlock);
         m.reason = reason;
         m.originTx = originTx;
         emit Marked(poolId, oldStatus, status, reason, originBlock, originTx);

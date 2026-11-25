@@ -170,6 +170,18 @@ contract PoolReflexTest is Test {
         assertEq(guard.statusOf(POOL), 2);
     }
 
+    function test_loop_aNewPoolStartsNarrowedUntilTheOwnerReopensIt() public {
+        bytes32 newPool = keccak256("a second pool on the hook");
+        IReactive.LogRecord memory log_ = _feeLog(0, 500, 20, keccak256("initialize"));
+        log_.topic1 = uint256(newPool);
+        _react(log_);
+        assertTrue(_deliverLast());
+        assertEq(guard.statusOf(newPool), 2, "fails closed: untested pools are not open");
+        vm.prank(owner);
+        guard.reopen(newPool);
+        assertEq(guard.statusOf(newPool), 0);
+    }
+
     function test_loop_aForgedCallbackFromAnotherReactiveContractIsRefused() public {
         _react(_feeLog(500, 100_000, 10, keccak256("up")));
         (bool ok,) = proxy.deliver(makeAddr("someoneElsesReactive"), system.request(0));

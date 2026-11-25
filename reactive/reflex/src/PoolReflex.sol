@@ -77,6 +77,9 @@ contract PoolReflex is AbstractReactive {
     }
 
     /// @dev Never reverts on a log it ignores: Reactive bills a reverted `react` in full.
+    ///      A pool created on the hook after this contract subscribed reports its first fee as `0 -> initialFee`,
+    ///      which is marked like any other change: a new pool starts narrowed until the owner reopens it after its
+    ///      test trades pass, the same rule the router applies to a pool it has not tested yet.
     function react(LogRecord calldata log_) external onlySystem {
         if (log_.chainId != originChainId || log_.contractAddress != hook || log_.topic0 != FEE_UPDATED_TOPIC0) return;
         address target = guard;

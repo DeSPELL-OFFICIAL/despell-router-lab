@@ -6,9 +6,11 @@
 //
 // Inputs (environment): PRIVATE_KEY (the hook and PoolGuard owner; only the forge child processes read it),
 // GUARD and REFLEX (the deployed contracts), RUNS (default 14, even so the fee ends where it started),
-// OUT (default ../deployments/reflex-latency-base-sepolia.json).
+// OUT (default ../deployments/reflex-latency-base-sepolia.json). The pool must start at 0.05% (500).
 //
 // Each run sends two transactions with forge (the fee change and the reopen); every read goes over plain JSON-RPC.
+// Results are written after every run, a failed run is recorded and the loop goes on, and every run ends with the
+// pool open again, so one slow callback cannot turn the later runs into MarkKept.
 // Latency is measured on chain: the PoolGuard mark's block against the fee change's block. Base Sepolia makes a block
 // about every 0.2 s and stamps blocks in whole seconds, so both the block gap and the second gap are kept.
 import { spawn } from "node:child_process";
@@ -134,64 +136,26 @@ function median(xs) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-async function main() {
-  console.log(`measure: ${RUNS} runs · hook ${HOOK} · PoolGuard ${GUARD} · PoolReflex ${REFLEX}`);
-  if ((await statusNow()) !== 0) {
-    console.log("measure: the pool is marked; reopening first");
-    await forgeSend(REFLEX_DIR, "script/Reopen.s.sol", "base_sepolia", { GUARD });
-  }
-  const lasnaStart = (await latest(LASNA_RPC)) - 50;
-  const runs = [];
-  for (let i = 1; i <= RUNS; i++) {
-    const oldFee = await feeNow();
-    const newFee = oldFee === LOW_FEE ? HIGH_FEE : LOW_FEE;
-    const fee = await forgeSend(POOL_DIR, "script/SetFee.s.sol", "base_sepolia", { HOOK, NEW_FEE: String(newFee) });
-    const feeBlock = await blockOf(BASE_RPC, fee.block);
-    const seen = await waitForMark(fee.hash, fee.block);
-    const run = { run: i, oldFee, newFee, feeTx: fee.hash, feeBlock: feeBlock.number, feeTime: feeBlock.time };
-    if (!seen) {
-      run.result = "no mark within 180 s";
-      console.log(`#${i} ${oldFee}->${newFee} fee ${fee.hash} block ${fee.block}: no mark within 180 s`);
-      runs.push(run);
-      continue;
-    }
-    const markBlock = await blockOf(BASE_RPC, Number(seen.log.blockNumber));
-    Object.assign(run, {
-      result: seen.kind,
-      markTx: seen.log.transactionHash,
-      markBlock: markBlock.number,
-      markTime: markBlock.time,
-      blocks: markBlock.number - feeBlock.number,
-      seconds: markBlock.time - feeBlock.time,
-    });
-    run.reactive = await findReactive(fee.hash, lasnaStart);
-    console.log(
-      `#${i} ${oldFee}->${newFee} fee ${fee.hash} (${fee.block}) -> mark ${run.markTx} (${run.markBlock}): ` +
-        `${run.seconds} s, ${run.blocks} blocks · Lasna ${run.reactive?.tx ?? "not found yet"}`,
-    );
-    if (seen.kind === "marked") {
-      const reopen = await forgeSend(REFLEX_DIR, "script/Reopen.s.sol", "base_sepolia", { GUARD });
-      run.reopenTx = reopen.hash;
-      run.reopenBlock = reopen.block;
-    }
-    runs.push(run);
-    await sleep(3_000);
-  }
+async function settle() {
+  // Whatever happened in a run, the next one must start from an open pool, or it would only see MarkKept.
+  if ((await statusNow()) === 0) return null;
+  return forgeSend(REFLEX_DIR, "script/Reopen.s.sol", "base_sepolia", { GUARD });
+}
 
-  // Lasna logs can lag the mark; look once more for any reactive transaction not found yet.
-  for (const run of runs) {
-    if (run.markTx && !run.reactive) run.reactive = await findReactive(run.feeTx, lasnaStart);
-  }
-
+function summarize(runs) {
   const marked = runs.filter((r) => r.result === "marked");
-  const summary = {
+  const secs = marked.map((r) => r.seconds);
+  return {
     runs: runs.length,
     marked: marked.length,
-    medianSeconds: marked.length ? median(marked.map((r) => r.seconds)) : null,
+    medianSeconds: marked.length ? median(secs) : null,
     medianBlocks: marked.length ? median(marked.map((r) => r.blocks)) : null,
-    minSeconds: marked.length ? Math.min(...marked.map((r) => r.seconds)) : null,
-    maxSeconds: marked.length ? Math.max(...marked.map((r) => r.seconds)) : null,
+    minSeconds: marked.length ? Math.min(...secs) : null,
+    maxSeconds: marked.length ? Math.max(...secs) : null,
   };
+}
+
+function save(runs) {
   const record = {
     measuredAt: new Date().toISOString(),
     origin: { chain: "Base Sepolia", chainId: 84532, hook: HOOK, poolId: POOL_ID },
@@ -199,11 +163,87 @@ async function main() {
     destination: { chain: "Base Sepolia", chainId: 84532, poolGuard: GUARD },
     method:
       "seconds = PoolGuard mark block timestamp - fee change block timestamp (whole seconds); blocks = block gap on Base Sepolia (about 0.2 s each)",
-    summary,
+    summary: summarize(runs),
     runs,
   };
   writeFileSync(OUT, `${JSON.stringify(record, null, 2)}\n`);
-  console.log(`measure: ${summary.marked}/${summary.runs} marked · median ${summary.medianSeconds} s (${summary.medianBlocks} blocks) · ${OUT}`);
+  return record.summary;
+}
+
+async function measureOnce(i, run) {
+  const oldFee = await feeNow();
+  const newFee = oldFee === LOW_FEE ? HIGH_FEE : LOW_FEE;
+  Object.assign(run, { oldFee, newFee });
+  const lasnaFrom = (await latest(LASNA_RPC)) - 20;
+  const fee = await forgeSend(POOL_DIR, "script/SetFee.s.sol", "base_sepolia", { HOOK, NEW_FEE: String(newFee) });
+  const feeBlock = await blockOf(BASE_RPC, fee.block);
+  Object.assign(run, { feeTx: fee.hash, feeBlock: feeBlock.number, feeTime: feeBlock.time, lasnaFrom });
+
+  const seen = await waitForMark(fee.hash, fee.block);
+  if (!seen) {
+    run.result = `no mark within ${MARK_TIMEOUT_MS / 1000} s`;
+    console.log(`#${i} ${oldFee}->${newFee} fee ${fee.hash} (${fee.block}): ${run.result}`);
+    return;
+  }
+  const markBlock = await blockOf(BASE_RPC, Number(seen.log.blockNumber));
+  Object.assign(run, {
+    result: seen.kind,
+    markTx: seen.log.transactionHash,
+    markBlock: markBlock.number,
+    markTime: markBlock.time,
+    blocks: markBlock.number - feeBlock.number,
+    seconds: markBlock.time - feeBlock.time,
+  });
+  run.reactive = await findReactive(fee.hash, lasnaFrom).catch(() => null);
+  console.log(
+    `#${i} ${oldFee}->${newFee} fee ${fee.hash} (${fee.block}) -> ${seen.kind} ${run.markTx} (${run.markBlock}): ` +
+      `${run.seconds} s, ${run.blocks} blocks · Lasna ${run.reactive?.tx ?? "not found yet"}`,
+  );
+}
+
+async function main() {
+  console.log(`measure: ${RUNS} runs · hook ${HOOK} · PoolGuard ${GUARD} · PoolReflex ${REFLEX}`);
+  const startFee = await feeNow();
+  if (startFee !== LOW_FEE) fail(`the pool's fee is ${startFee}, not ${LOW_FEE}; set it back to ${LOW_FEE} first`);
+  if (await settle()) console.log("measure: the pool was marked; reopened it first");
+
+  const runs = [];
+  for (let i = 1; i <= RUNS; i++) {
+    const run = { run: i };
+    runs.push(run);
+    try {
+      await measureOnce(i, run);
+    } catch (err) {
+      run.result = run.result ?? "error";
+      run.error = String(err.message).slice(0, 500);
+      console.log(`#${i} error: ${run.error}`);
+    }
+    try {
+      // A late callback can still land; give it the same window, then open the pool again.
+      if (run.result !== "marked" && run.feeTx) {
+        const late = await waitForMark(run.feeTx, run.feeBlock);
+        if (late) run.late = { kind: late.kind, markTx: late.log.transactionHash, markBlock: Number(late.log.blockNumber) };
+      }
+      const reopen = await settle();
+      if (reopen) Object.assign(run, { reopenTx: reopen.hash, reopenBlock: reopen.block });
+    } catch (err) {
+      run.settleError = String(err.message).slice(0, 500);
+      console.log(`#${i} could not reopen: ${run.settleError}`);
+    }
+    save(runs);
+    await sleep(3_000);
+  }
+
+  // Lasna logs can lag the mark; look once more for any reactive transaction not found yet.
+  for (const run of runs) {
+    if (run.markTx && !run.reactive) run.reactive = await findReactive(run.feeTx, run.lasnaFrom).catch(() => null);
+  }
+  const summary = save(runs);
+  const endFee = await feeNow().catch(() => null);
+  console.log(
+    `measure: ${summary.marked}/${summary.runs} marked · median ${summary.medianSeconds} s (${summary.medianBlocks} blocks) · ` +
+      `fee now ${endFee} · ${OUT}`,
+  );
   if (summary.marked < runs.length) process.exitCode = 1;
 }
 

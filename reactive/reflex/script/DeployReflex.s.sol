@@ -13,6 +13,8 @@ contract DeployReflex is ReflexConfig {
     function run() external returns (PoolReflex reflex) {
         _requireChain(LASNA);
         uint256 fund = vm.envUint("REFLEX_FUND_WEI");
+        // Funds sent here stay with PoolReflex for reactive fees (it has no withdraw), so keep it lab-sized.
+        require(fund > 0 && fund <= 1 ether, "REFLEX_FUND_WEI must be above 0 and at most 1 lREACT");
         uint256 pk = _key();
         vm.startBroadcast(pk);
         reflex = new PoolReflex{value: fund}(BASE_SEPOLIA, HOOK, BASE_SEPOLIA, vm.addr(pk));

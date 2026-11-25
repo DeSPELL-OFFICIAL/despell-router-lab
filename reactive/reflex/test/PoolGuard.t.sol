@@ -95,6 +95,12 @@ contract PoolGuardTest is Test {
         assertEq(guard.statusOf(POOL), 3);
     }
 
+    function test_mark_originBlockSaturatesInsteadOfWrapping() public {
+        vm.prank(proxy);
+        guard.mark(reflex, POOL, 2, FEE_CHANGED, uint256(type(uint64).max) + 6, ORIGIN_TX);
+        assertEq(guard.markOf(POOL).originBlock, type(uint64).max);
+    }
+
     function testFuzz_mark_statusIsTheHighestAskedSoFar(uint8[8] memory asks) public {
         uint8 highest;
         for (uint256 i; i < asks.length; i++) {

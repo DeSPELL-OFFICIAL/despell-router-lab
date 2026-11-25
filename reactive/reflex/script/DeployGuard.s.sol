@@ -15,7 +15,8 @@ contract DeployGuard is ReflexConfig {
         _requireChain(BASE_SEPOLIA);
         address reflex = vm.envAddress("REFLEX");
         uint256 fund = vm.envUint("GUARD_FUND_WEI");
-        require(fund <= 0.005 ether, "GUARD_FUND_WEI out of range for this lab");
+        // An unfunded PoolGuard cannot pay the callback proxy, so no mark would ever land.
+        require(fund > 0 && fund <= 0.005 ether, "GUARD_FUND_WEI must be above 0 and at most 0.005 ETH");
         uint256 pk = _key();
         vm.startBroadcast(pk);
         guard = new PoolGuard{value: fund}(IPayable(payable(CALLBACK_PROXY)), reflex, vm.addr(pk));
