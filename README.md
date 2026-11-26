@@ -1,6 +1,6 @@
 # DeSpell Router Lab
 
-Hackathon work for the [DeSpell](https://despell.io) AI router, built in the open during December 2026.
+Hackathon work for the [DeSpell](https://despell.io) AI router, built in the open from 2026-11-26.
 
 DeSpell is an AI wallet: you say what you want, it shows one card with what leaves your wallet, what comes in, and the route, and nothing moves until you sign it. The router behind that card watches every pool it might send you through and tightens or closes a pool the moment something about it changes.
 

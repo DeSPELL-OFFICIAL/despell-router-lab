@@ -1,16 +1,52 @@
 # reactive/ — Reactive Omni: the router's reflex, on-chain
 
-When a pool the DeSpell router might use changes a setting, the router tightens that pool at once, before any AI
-review. Today a server patrol does this and can take up to 60 seconds. This folder moves the reflex on-chain:
+**Reactive Omni Buildathon · track: Every Second Counts.** When a Uniswap v4 pool on Base Sepolia changes its fee, a
+Reactive contract on Lasna hears the event and, through a callback, marks that pool on a `PoolGuard` contract back on
+Base Sepolia, about a second later. The lab's swap card reads the mark and quotes around the marked pool.
+
+| For judges | |
+| --- | --- |
+| The loop | `FeeUpdated` from our hook on Base Sepolia → `PoolReflex.react()` on Reactive Lasna → callback → `PoolGuard.mark()` on Base Sepolia |
+| Contracts | `PoolReflex` on Reactive Lasna (5318007): [`0x321dB6a8b9eB320c761a8f801FE4757e60f2484A`](https://lasna.reactscan.net/address/0x321dB6a8b9eB320c761a8f801FE4757e60f2484A) <br> `PoolGuard` on Base Sepolia (84532): [`0xcF269776640D3D19C9c515f3eEAF1DaD53d88378`](https://sepolia.basescan.org/address/0xcF269776640D3D19C9c515f3eEAF1DaD53d88378) <br> `DynamicFeeHook` on Base Sepolia, the event's origin: [`0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000`](https://sepolia.basescan.org/address/0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000) |
+| One full loop | fee 0.05% → 10%: [`0x29ade921…b918`](https://sepolia.basescan.org/tx/0x29ade9215a7047a55b12ef0dc95be6e9e3460c4da2ccc24580c159a414bdb918) (Base Sepolia) → reaction [`0x62d7f9b2…5da5`](https://lasna.reactscan.net/tx/0x62d7f9b24a8b7fe73bc616dba6a21b3732e00834745e2f29fe4669d3e8095da5) (Lasna) → mark [`0xc543b11f…b65c`](https://sepolia.basescan.org/tx/0xc543b11fa9b2a632d4fe88d5d3764f8056d694a65e0ee02e4bff9aa51330b65c) (Base Sepolia), 1 s and 5 blocks after the change. All 14 loops: [Measured latency](#measured-latency) |
+| Latency | 14 of 14 fee changes marked. Median 1 s by block timestamps, 6.5 Base Sepolia blocks (≈ 1.3 s at 200 ms a block); slowest 2 s, 10 blocks |
+| How it was measured | `reflex/scripts/measure.mjs` changes the fee, waits for PoolGuard's `Marked` event, and takes the mark's block against the change's block: the timestamp gap in whole seconds and the block gap. Every run's three transactions are kept in [`deployments/reflex-latency-base-sepolia.json`](deployments/reflex-latency-base-sepolia.json). [Run it yourself](#measure-it-yourself) |
+| What Reactive does | It is the only way a mark is written: PoolGuard accepts `mark` only from Reactive's callback proxy on behalf of PoolReflex, and the router's reflex table (which change narrows, which blocks) lives in PoolReflex |
+| Demo | The `/reactive` page of the lab app (`app/`): the swap card leaves a marked pool out with a "Left out" row and stops with no route when every pool is marked. [The route demo](#the-route-demo-2026-11-26) shows it on chain, and [the demo video's loop](#the-demo-video-loop-2026-11-26) lists the transactions recorded in the video |
+
+Why it matters: the DeSpell router tightens a pool the moment the pool changes a setting, before any AI review. Today a
+server patrol does that and can take up to 60 seconds, long enough for a pool to raise its fee between a quote and a
+signature. On Reactive Omni the mark lands about a second after the change, and anyone can read it with
+`statusOf(poolId)`.
+
+What is new: the DeSpell app itself is an existing, private product. Everything in this folder (the hook, both
+Reactive contracts, the scripts and every transaction) and the `/reactive` page that reads the marks were built during
+the buildathon; the first contract went on-chain on 2026-11-25 at 17:36 UTC (2026-11-26 in Korea). The reflex table PoolReflex carries is the private
+router's rule set, brought in as a specification, not as code.
+
+The pieces:
 
 1. **A test pool whose setting can change** — a Uniswap v4 ETH/USDC pool on Base Sepolia with our hook. Changing
-   its fee emits one `FeeUpdated` event. *(`src/`, live)*
-2. A Reactive contract on Reactive Lasna that hears `FeeUpdated` and, through a callback, marks the pool as
-   narrowed on a `PoolGuard` contract on Base Sepolia. Anyone reads the mark with `statusOf(pool)`. *(`reflex/`)*
-3. A quote that reads the marks — the app's swap card on `/reactive` quotes both test pools, leaves a marked one out
-   with a "Left out" row, and stops with no route when both are marked. *(`app/src/components/reactive/`)*
+   its fee emits one `FeeUpdated` event. *(`src/`)*
+2. **The reflex** — PoolReflex on Reactive Lasna hears `FeeUpdated` and, through a callback, marks the pool as
+   narrowed on PoolGuard on Base Sepolia. Anyone reads the mark with `statusOf(pool)`. *(`reflex/`)*
+3. **A quote that reads the marks** — the app's swap card on `/reactive` quotes both test pools, leaves a marked one
+   out with a "Left out" row, and stops with no route when both are marked. *(`app/src/components/reactive/`)*
 
 Marks only tighten, and nothing here moves anyone's money.
+
+### Measure it yourself
+
+```sh
+# Read a mark (no key): 0 open, 1 small cap, 2 narrowed, 3 blocked
+cast call 0xcF269776640D3D19C9c515f3eEAF1DaD53d88378 "statusOf(bytes32)(uint8)" \
+  0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4 --rpc-url https://sepolia.base.org
+
+# Measure the loop again (the hook and PoolGuard owner's key; run from reflex/)
+GUARD=0xcF269776640D3D19C9c515f3eEAF1DaD53d88378 REFLEX=0x321dB6a8b9eB320c761a8f801FE4757e60f2484A \
+  node --env-file=<your env file> ../scripts/with-key.mjs -- node scripts/measure.mjs
+node scripts/report.mjs     # rebuilds the latency table below and the page's data from the record
+```
 
 ## The test pool (Base Sepolia, chain 84532)
 
@@ -67,6 +103,34 @@ What the card cannot catch: it reads the marks right before it asks the wallet f
 lands while the wallet's window is open is seen only before the next one. The plan's deadline bounds how long that
 window can be. Between a plan's transactions, that read also decides in place of the 6-second age rule, so a gap in
 the polling does not stop a swap after its approval.
+
+#### The demo video loop (2026-11-26)
+
+`reflex/scripts/loop-demo.mjs` walks one loop on pool A a step at a time while the `/reactive` card is recorded: the
+fee up to 10%, back to 0.05%, then the operator's reopen. Its record is
+[`deployments/loop-demo-base-sepolia.json`](deployments/loop-demo-base-sepolia.json). The fee changes and the reopen
+are sent on Base Sepolia by the hook and PoolGuard owner; the reactions are PoolReflex on Reactive Lasna; the answers
+are PoolGuard's callbacks on Base Sepolia.
+
+| Step | Change (Base Sepolia) · block | Reaction (Lasna) | PoolGuard's answer · block | Change → answer |
+| --- | --- | --- | --- | --- |
+| Pool A fee 0.05% → 10% | [`0x32e5e8a6…d963`](https://sepolia.basescan.org/tx/0x32e5e8a6b3ac3f1ced1f02eef31f904e67c3c6b3cccc086f892cd9ed51efd963) · 63720683 | [`0xfead3e88…0f66`](https://lasna.reactscan.net/tx/0xfead3e889deb88386a83b45177f0b0a789d8dbf0583a6fe3642b96023cc70f66) | narrowed (2), [`0xc60c35a1…2a11`](https://sepolia.basescan.org/tx/0xc60c35a18a86784ac96f766ad96336e7443754354d17ae146b50ca7dc2372a11) · 63720688 | 1 s · 5 blocks |
+| Pool A fee 10% → 0.05% | [`0xe60febce…5bc7`](https://sepolia.basescan.org/tx/0xe60febcee6c71413520734f7cdc7536f65f92ef5cc876051241687b136935bc7) · 63720829 | [`0x3e7b1fcd…2819`](https://lasna.reactscan.net/tx/0x3e7b1fcde1a4fca56d51d8c016dceadf44cd5d7c35dd86f693c62b538f4a2819) | kept narrowed (`MarkKept`), [`0xb0ea8485…3f4e`](https://sepolia.basescan.org/tx/0xb0ea8485162692cec504978613f511db47155105c65fd03b508ae57075303f4e) · 63720836 | 2 s · 7 blocks |
+| Reopen pool A | [`0xce50602d…9a2f`](https://sepolia.basescan.org/tx/0xce50602dd2172edb7e77fcd54052d294e989a1aee5bd0c277ce1f45848c89a2f) · 63720946 | — | — | — |
+
+The card in the video takes test pool A while both pools are open, switches to test pool B with a "Left out" row for
+pool A once the mark lands, stays on B after the fee goes back, and returns to A after the reopen. Pool A ended at
+0.05% and open. The two chains stamp time separately, so a Lasna timestamp can read a second earlier than the Base
+Sepolia change it reacts to; the gaps above use Base Sepolia blocks only.
+
+A run of the same script minutes earlier (its recording stopped on a bug in the recorder, not in the loop): fee to
+10% [`0xbf4770ea…a200`](https://sepolia.basescan.org/tx/0xbf4770eaeabb4144e5de3c64ec71bf5653d62359ed49626e7e3a89682b6fa200)
+→ reaction [`0x555e5587…e892`](https://lasna.reactscan.net/tx/0x555e55871943a3820c15f46cdaec3a67c499dc98bf28bd55807624509304e892)
+→ mark [`0x9efa0ad2…90af`](https://sepolia.basescan.org/tx/0x9efa0ad22673b97deb89fdb76fb5a8a0ffa8ddf65ab6b8e197dd0bf9c58190af),
+1 s · 3 blocks; back to 0.05% [`0x3816efff…8e89`](https://sepolia.basescan.org/tx/0x3816efff66e180c67877a3583a56539939b49b5b7955925d1a31a2605d538e89)
+→ reaction [`0x81a95ed4…6d4e`](https://lasna.reactscan.net/tx/0x81a95ed4c3408364c342c3d65e13fd8e8cdeec18ef65647655ba4c033d496d4e)
+→ `MarkKept` [`0x86291a2d…762c`](https://sepolia.basescan.org/tx/0x86291a2d574f6a415e395d627d1f7412af9c7307583d2ec176a8b74d5fd5762c),
+4 blocks within the same second; reopen [`0xcb49565f…2e82`](https://sepolia.basescan.org/tx/0xcb49565f94b3eb0f4ec74549da16b65f8f94d3e2bcd7c179f2f609f3adfe2e82).
 
 ### The event a Reactive contract subscribes to
 
