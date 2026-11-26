@@ -17,7 +17,7 @@ export default async function Page(props: PageProps<"/xlayer">) {
         <h1 className="lab-h1">{c.pitch}</h1>
         <p className="lab-lede">
           Before the GIWA Sepolia card below can be signed, it asks the circuit on X Layer for its judgment of the pool the trade goes through, and compares it with the
-          server&apos;s. If they differ, the card stops. The server&apos;s judgment here is a recorded sample until the router journal is connected.{" "}
+          server&apos;s. If they differ, the card stops. The server&apos;s judgment here is a recorded sample; the router&apos;s past judgments are replayed through the circuit separately.{" "}
           <Link href={circuitPageHref(GIWA_SEPOLIA.pool.address, demoMismatch)}>See the pool&apos;s circuit</Link>.
         </p>
         {demoMismatch ? (

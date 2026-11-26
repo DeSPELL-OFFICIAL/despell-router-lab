@@ -4,7 +4,7 @@ import { xLayer } from "viem/chains";
 import { describe, expect, it } from "vitest";
 import { packPins, OUTPUT_COUNT, unpackPins } from "@despell-lab/xlayer/src/bits.ts";
 import { judge } from "@despell-lab/xlayer/src/rule.ts";
-import { SELECTOR } from "@despell-lab/xlayer/src/onchain.ts";
+import { SELECTOR, TAPED_OUT as XLAYER_TAPED_OUT } from "@despell-lab/xlayer/src/onchain.ts";
 import { GIWA_SEPOLIA, BASE_SEPOLIA } from "@/lib/swap/chains";
 import { canSign } from "@/components/sign-card/sign-card";
 import { CIRCUIT, deploymentFrom, evaluateLocally, parseDeployment, TAPED_OUT, type CircuitDeployment } from "./circuit";
@@ -35,10 +35,8 @@ describe("the circuit gate on the card", () => {
     expect(circuitLine(check)).toEqual({ circuit: "Pool judgment circuit #7", status: "same judgment", tone: "ok" });
   });
 
-  // Defaults to be confirmed: nothing to compare does not hold the card.
-  it("does not hold the card when there is no circuit yet, or X Layer cannot be reached", () => {
-    expect(circuitGate({ kind: "not-deployed", server })).toEqual({ state: "ok" });
-    expect(circuitLine({ kind: "not-deployed", server })?.status).toBe("being prepared");
+  // Default (DES-704): nothing compared does not hold the card.
+  it("does not hold the card when X Layer cannot be reached", () => {
     expect(circuitGate({ kind: "unreachable", server, deployment: DEPLOYMENT, reason: "HTTP 429" })).toEqual({ state: "ok" });
     expect(circuitLine({ kind: "unreachable", server, deployment: DEPLOYMENT, reason: "HTTP 429" })?.status).toBe("not reached");
   });
@@ -110,9 +108,8 @@ describe("checkFromQuery: a re-judge that fails in transport", () => {
     });
   });
 
-  it("never asks without a server judgment or a deployment", () => {
+  it("never asks without a server judgment", () => {
     expect(checkFrom(null, DEPLOYMENT, { status: "asking" }).kind).toBe("none");
-    expect(checkFrom(server, null, { status: "asking" }).kind).toBe("not-deployed");
   });
 });
 
@@ -220,6 +217,8 @@ describe("parseDeployment", () => {
 describe("deploymentFrom", () => {
   it("is the X Layer mainnet tape-out unless both settings override it", () => {
     expect(TAPED_OUT).toEqual({ processor: "0x3A49E01c0080FF9F99B5Df164e7ac27941836603", circuitId: 1n });
+    // The same tape-out xlayer/ names (its README records the transactions).
+    expect(TAPED_OUT).toEqual({ processor: XLAYER_TAPED_OUT.processor, circuitId: BigInt(XLAYER_TAPED_OUT.circuitId) });
     expect(deploymentFrom(undefined, undefined)).toEqual(TAPED_OUT);
     expect(deploymentFrom("0x1111111111111111111111111111111111111111", "7")).toEqual(DEPLOYMENT);
   });

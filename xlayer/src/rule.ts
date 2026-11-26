@@ -55,7 +55,7 @@ export const REFLEX_BY_CHANGE: Readonly<Record<ChangeKind, "block" | "restrict" 
 /** Changes that send a trade down the deep lane (`POOL_CODE_CHANGE_KINDS`). */
 export const CODE_CHANGE_KINDS: readonly ChangeKind[] = ["code_changed", "token_code_changed", "implementation_changed"];
 
-/** Pool families the patrol knows (`POOL_FAMILIES`). */
+/** Pool families the patrol knew as of 2026-11-25 UTC (`POOL_FAMILIES`). Families added later are outside this list (README). */
 export const FAMILIES = ["ammora_curve", "uniswap_v3", "pancake_infinity_cl"] as const;
 export type Family = (typeof FAMILIES)[number];
 

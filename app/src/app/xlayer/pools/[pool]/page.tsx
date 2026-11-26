@@ -87,7 +87,7 @@ export default async function Page(props: PageProps<"/xlayer/pools/[pool]">) {
             {server.judgment.stage}, {server.judgment.lane} lane
           </b>{" "}
           <span className="ds-dim">
-            · {server.at.replace("T", " ").replace(":00Z", " UTC")} · a recorded sample until the router journal is connected
+            · {server.at.replace("T", " ").replace(":00Z", " UTC")} · a recorded sample
           </span>
         </p>
         <PinTable rows={outputRows(encodeOutput(server.judgment))} />
