@@ -89,14 +89,19 @@ export function leftOut(read: MarksRead): PoolMark[] {
  * The card's gate from the latest read. `failing`: the latest read failed (an earlier one may still be on screen).
  * Only a fresh read (no failure, at most MARKS_MAX_AGE_MS old at `nowMs`) with at least one pool still in the route
  * lets the sign button turn on.
+ *
+ * `signing`: the card is between a plan's transactions. The age rule is off then, because the signing loop reads the
+ * marks again right before each transaction and that read decides; a gap in the polling (a hidden tab, say) would
+ * otherwise stop a swap after its approval for a read that is about to be replaced anyway.
  */
-export function markGate(read: MarksRead | null, failing: boolean, chain: BaseSepoliaSwap, nowMs: number): ContestGate {
+export function markGate(read: MarksRead | null, failing: boolean, chain: BaseSepoliaSwap, nowMs: number, signing = false): ContestGate {
   if (!read) {
     return failing
       ? { state: "hold", title: "Could not read the on-chain marks", items: `· PoolGuard ${short(chain.poolGuard)} · nothing is quoted until it answers` }
       : { state: "pending", label: "the on-chain marks" };
   }
-  if (failing || nowMs - read.receivedAt > MARKS_MAX_AGE_MS) return { state: "pending", label: "a fresh read of the on-chain marks" };
+  const stale = !signing && nowMs - read.receivedAt > MARKS_MAX_AGE_MS;
+  if (failing || stale) return { state: "pending", label: "a fresh read of the on-chain marks" };
   if (leftOut(read).length === read.marks.length) return { state: "hold", title: "No route", items: "· every pool is marked on-chain" };
   return { state: "ok" };
 }

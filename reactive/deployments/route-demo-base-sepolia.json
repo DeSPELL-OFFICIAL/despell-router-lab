@@ -1,0 +1,125 @@
+{
+  "startedAt": "2026-11-26T01:51:02.992Z",
+  "chain": {
+    "name": "Base Sepolia",
+    "chainId": 84532
+  },
+  "hook": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000",
+  "poolGuard": "0xcF269776640D3D19C9c515f3eEAF1DaD53d88378",
+  "poolReflex": "0x321dB6a8b9eB320c761a8f801FE4757e60f2484A",
+  "pools": {
+    "A": "0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4",
+    "B": "0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2"
+  },
+  "steps": [
+    {
+      "step": "open pool B",
+      "txs": [
+        {
+          "hash": "0x454e818dd215919c0e59d1c4169be131aca2f6390c838dcce0b85e72a27d6367",
+          "block": 63680065
+        },
+        {
+          "hash": "0xe7147e4dd657d425ed16ba23161abb66868ff10a2e6ab0cb12a7e9e911671959",
+          "block": 63680069
+        }
+      ],
+      "answer": {
+        "result": "marked",
+        "markTx": "0x5a6aabcedafaf8084df8df9b843a30a1b6e90d3d64c21e2422a724515a421b67",
+        "markBlock": 63680071,
+        "status": 2,
+        "blocks": 6,
+        "seconds": 2
+      }
+    },
+    {
+      "step": "pool A fee 0.05% -> 10%",
+      "txs": [
+        {
+          "hash": "0xf4edd3e54c4dcce01d029331b3099606a135aaf00c0c72869e4ce092da98c98c",
+          "block": 63680118
+        }
+      ],
+      "answer": {
+        "result": "marked",
+        "markTx": "0xb6c2abdaabd2c58ef9aab89642146f3b527129e585c03cf72edbda1c4ba173a4",
+        "markBlock": 63680125,
+        "status": 2,
+        "blocks": 7,
+        "seconds": 1
+      }
+    },
+    {
+      "step": "reopen pool B",
+      "txs": [
+        {
+          "hash": "0x8a1323bc92f8b8fe3fa93d4b1bc5650c9f7f3833079ecd843791eafe771d16eb",
+          "block": 63685019
+        }
+      ]
+    },
+    {
+      "step": "pool A fee 10% -> 0.05%",
+      "txs": [
+        {
+          "hash": "0x2786376c7fa5c38d8cbb9586f146299c9bdec5aa711d5877ca25b2e710145b82",
+          "block": 63685173
+        }
+      ],
+      "answer": {
+        "result": "kept",
+        "markTx": "0x9f038c6e15427db6046c9cd868eb733b940e96374720a37184edbb1c10db8254",
+        "markBlock": 63685178,
+        "status": 2,
+        "blocks": 5,
+        "seconds": 1
+      }
+    },
+    {
+      "step": "reopen pool A",
+      "txs": [
+        {
+          "hash": "0x52725facddf302bebb09e9d4dfa096c2898e270a1cefe3e717420816a6b40ba8",
+          "block": 63685227
+        }
+      ]
+    }
+  ],
+  "states": [
+    {
+      "state": "no-route",
+      "statuses": {
+        "A": 2,
+        "B": 2
+      },
+      "released": "captured",
+      "at": "2026-11-26T02:07:44.110Z"
+    },
+    {
+      "state": "left-out",
+      "statuses": {
+        "A": 2,
+        "B": 0
+      },
+      "released": "captured",
+      "at": "2026-11-26T02:08:15.371Z"
+    },
+    {
+      "state": "both-open",
+      "statuses": {
+        "A": 0,
+        "B": 0
+      },
+      "released": "captured",
+      "at": "2026-11-26T02:08:54.854Z"
+    }
+  ],
+  "end": {
+    "feeA": 500,
+    "feeB": 500,
+    "statusA": 0,
+    "statusB": 0,
+    "at": "2026-11-26T02:08:55.722Z"
+  }
+}

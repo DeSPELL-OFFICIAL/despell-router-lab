@@ -91,5 +91,41 @@
       "block": 63534286,
       "timestamp": 1795628726
     }
-  ]
+  ],
+  "poolB": {
+    "poolId": "0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2",
+    "poolKey": {
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "fee": 8388608,
+      "tickSpacing": 60,
+      "hooks": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000"
+    },
+    "startTick": -202170,
+    "startSqrtPriceX96": "3228766414181677955177335",
+    "positions": [
+      {
+        "tokenId": 34387,
+        "ethWei": "10000000000000000",
+        "tickLower": -202140,
+        "tickUpper": -201900,
+        "tx": "0xe7147e4dd657d425ed16ba23161abb66868ff10a2e6ab0cb12a7e9e911671959"
+      }
+    ],
+    "transactions": [
+      {
+        "step": "initialize pool B at pool A price, FeeUpdated 0 -> 500",
+        "hash": "0x454e818dd215919c0e59d1c4169be131aca2f6390c838dcce0b85e72a27d6367",
+        "block": 63680065,
+        "timestamp": 1795657881
+      },
+      {
+        "step": "seed 0.01 ETH (position 34387)",
+        "hash": "0xe7147e4dd657d425ed16ba23161abb66868ff10a2e6ab0cb12a7e9e911671959",
+        "block": 63680069,
+        "timestamp": 1795657882
+      }
+    ],
+    "routeDemo": "route-demo-base-sepolia.json"
+  }
 }

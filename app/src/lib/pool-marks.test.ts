@@ -83,6 +83,14 @@ describe("markGate", () => {
     expect(MARKS_MAX_AGE_MS).toBe(6_000);
   });
 
+  // Between a plan's transactions the read right before each one decides, so an old read alone does not stop the swap.
+  it("leaves the age to the check before each transaction while signing", () => {
+    const old = NOW + MARKS_MAX_AGE_MS + 60_000;
+    expect(markGate(readOf(0, 0), false, BASE_SEPOLIA, old, true)).toEqual({ state: "ok" });
+    expect(markGate(readOf(0, 0), true, BASE_SEPOLIA, old, true)).toEqual({ state: "pending", label: "a fresh read of the on-chain marks" });
+    expect(markGate(readOf(2, 3), false, BASE_SEPOLIA, old, true)).toEqual({ state: "hold", title: "No route", items: "· every pool is marked on-chain" });
+  });
+
   it("stops with no route when every pool is marked", () => {
     expect(markGate(readOf(2, 3), false, BASE_SEPOLIA, NOW)).toEqual({ state: "hold", title: "No route", items: "· every pool is marked on-chain" });
   });

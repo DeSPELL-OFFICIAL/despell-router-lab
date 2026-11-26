@@ -125,9 +125,6 @@ function stop(msg) {
 }
 
 async function main() {
-  mkdirSync(SIGNAL_DIR, { recursive: true });
-  // A signal left from an earlier run would release a state before it is captured.
-  for (const state of STATES) rmSync(join(SIGNAL_DIR, `${state}.done`), { force: true });
   log(`hook ${HOOK} · PoolGuard ${GUARD} · PoolReflex ${REFLEX} · pool B seed ${SEED_WEI} wei`);
   if (await initialized(POOL_B_ID)) fail(`pool B ${POOL_B_ID} is already initialized; this demo opens it`);
   if ((await feeOf(POOL_ID)) !== LOW_FEE) fail(`pool A's fee is not ${LOW_FEE}; set it back first`);
@@ -139,6 +136,10 @@ async function main() {
     log("CHECK_ONLY=1: nothing sent");
     process.exit(0);
   }
+  // A signal left from an earlier run would release a state before it is captured. Cleared only once the checks pass,
+  // so a second run started by mistake (pool B already open) stops before it touches a running demo's signals.
+  mkdirSync(SIGNAL_DIR, { recursive: true });
+  for (const state of STATES) rmSync(join(SIGNAL_DIR, `${state}.done`), { force: true });
   save();
 
   // 1. Pool B opens at A's price; its FeeUpdated(0 -> 500) is a change, so PoolReflex marks it narrowed.
