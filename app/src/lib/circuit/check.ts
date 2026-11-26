@@ -10,8 +10,8 @@ import type { ServerJudgment } from "./server-judgment";
   input bits. A difference holds the card. While the circuit is being asked
   the card is pending, so the button stays off.
 
-  Defaults, to be confirmed (DES-704): with no circuit taped out yet, or when
-  X Layer cannot be reached, nothing is compared and the card is not held.
+  Default (DES-704): when X Layer cannot be reached, nothing is compared and
+  the card is not held.
   The server's judgment is the one that decides; the circuit is a second,
   public copy.
 */
@@ -19,7 +19,6 @@ import type { ServerJudgment } from "./server-judgment";
 export type CircuitCheck =
   /** The server has no judgment of this pool: no circuit line. */
   | { kind: "none" }
-  | { kind: "not-deployed"; server: ServerJudgment }
   | { kind: "checking"; server: ServerJudgment; deployment: CircuitDeployment }
   | { kind: "same"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
   | { kind: "differs"; server: ServerJudgment; deployment: CircuitDeployment; circuit: Judgment; block: bigint }
@@ -40,9 +39,8 @@ export type EvalState =
  * The check for a pool, from the server's judgment, where the circuit is taped out, and the X Layer read. A read in
  * flight (the first one or a re-judge) is "checking", so a card holds its sign button off until the answer is in.
  */
-export function checkFrom(server: ServerJudgment | null, deployment: CircuitDeployment | null, read: EvalState): CircuitCheck {
+export function checkFrom(server: ServerJudgment | null, deployment: CircuitDeployment, read: EvalState): CircuitCheck {
   if (!server) return { kind: "none" };
-  if (!deployment) return { kind: "not-deployed", server };
   switch (read.status) {
     case "asking":
       return { kind: "checking", server, deployment };
@@ -88,7 +86,7 @@ const fromAnswer = (a: CircuitAnswer): EvalState =>
  * hold. After an answer that let the card through, the failure is shown as a failure, never as the old answer.
  * `rejudgeFailed` marks a failure that came after an earlier answer, for the screen.
  */
-export function checkFromQuery(server: ServerJudgment | null, deployment: CircuitDeployment | null, q: QueryState): { check: CircuitCheck; rejudgeFailed: boolean } {
+export function checkFromQuery(server: ServerJudgment | null, deployment: CircuitDeployment, q: QueryState): { check: CircuitCheck; rejudgeFailed: boolean } {
   if (q.rejudging || (!q.data && !q.failure)) return { check: checkFrom(server, deployment, { status: "asking" }), rejudgeFailed: false };
   const earlier = q.data ? checkFrom(server, deployment, fromAnswer(q.data)) : null;
   const failedLast = q.failure !== null && (!q.data || q.failureUpdatedAt >= q.dataUpdatedAt);
@@ -109,7 +107,6 @@ export function circuitGate(check: CircuitCheck): ContestGate {
     case "refused":
       return { state: "hold", title: REFUSED_TITLE[check.problem], items: `· ${check.reason}` };
     case "none":
-    case "not-deployed":
     case "same":
     case "unreachable":
       return { state: "ok" };
@@ -129,8 +126,6 @@ export function circuitLine(check: CircuitCheck): CircuitLine | null {
   switch (check.kind) {
     case "none":
       return null;
-    case "not-deployed":
-      return { circuit: "Pool judgment circuit", status: "being prepared", tone: "plain" };
     case "checking":
       return { circuit: `Pool judgment circuit #${check.deployment.circuitId}`, status: "checking", tone: "plain" };
     case "same":

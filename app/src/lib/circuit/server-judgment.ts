@@ -6,9 +6,10 @@ import { GIWA_SEPOLIA } from "@/lib/swap/chains";
   The server's judgment of a pool: the facts it judged on (as the circuit's
   input) and what it decided (stage written, lane for a trade).
 
-  The real source is the router's journal, read through a read-only database
-  account (DES-702). Until that account exists the app uses a recorded
-  sample, and every screen that shows it says so.
+  The app uses a recorded sample, and every screen that shows it says so.
+  The router's journal lives in its private database and the site is given
+  no address for it. Its past judgments are replayed through the circuit
+  offline instead, from an export (xlayer/scripts/replay-journal.ts, DES-702).
 */
 
 export type ServerJudgment = {

@@ -20,16 +20,14 @@ export function RejudgePanel({ chainId, pool, demoMismatch }: { chainId: number;
           ? { text: "Asking X Layer…", tone: "plain" }
           : check.kind === "unreachable"
             ? { text: `X Layer not reached (${check.reason})`, tone: "plain" }
-            : check.kind === "refused"
-              ? { text: `${REFUSED_TITLE[check.problem]}: ${check.reason}`, tone: "stop" }
-            : { text: "Being prepared: the circuit is not taped out on X Layer yet", tone: "plain" };
+            : { text: `${REFUSED_TITLE[check.problem]}: ${check.reason}`, tone: "stop" };
   return (
     <section className="lab-panel" aria-labelledby="onchain-h" data-circuit={check.kind}>
       <div className="lab-panel-head">
         <h2 id="onchain-h" className="lab-h2">
           Circuit output on X Layer
         </h2>
-        <button type="button" className="ds-btn is-primary" data-action="rejudge" onClick={rejudge} disabled={check.kind === "not-deployed" || asking}>
+        <button type="button" className="ds-btn is-primary" data-action="rejudge" onClick={rejudge} disabled={asking}>
           {asking ? "Asking X Layer…" : "Re-judge on X Layer"}
         </button>
       </div>
