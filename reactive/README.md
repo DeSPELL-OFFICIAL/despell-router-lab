@@ -21,7 +21,7 @@ signature. On Reactive Omni the mark lands about a second after the change, and 
 
 What is new: the DeSpell app itself is an existing, private product. Everything in this folder (the hook, both
 Reactive contracts, the scripts and every transaction) and the `/reactive` page that reads the marks were built during
-the buildathon; the first contract went on-chain on 2026-11-25 at 17:36 UTC (2026-11-26 in Korea). The reflex table PoolReflex carries is the private
+the buildathon; the first contract went on-chain on 2026-11-25 at 17:36 UTC. The reflex table PoolReflex carries is the private
 router's rule set, brought in as a specification, not as code.
 
 The pieces:
@@ -280,7 +280,7 @@ its deployed bytecode can be rebuilt.
 | `script/Reopen.s.sol` | The owner reopens a test pool (`POOL_ID`, default pool A) | Base Sepolia |
 | `scripts/measure.mjs` | Changes the fee, waits for the mark, records the three transactions, reopens, repeats | both |
 | `scripts/route-demo.mjs` | Opens test pool B, then holds three states for the app's card: both marked, only A marked, both open | Base Sepolia |
-| `scripts/loop-demo.mjs` | One loop on pool A, a step per signal, for a screen recording: fee to 10% (marked), back to 0.05% (mark kept), reopen | Base Sepolia |
+| `scripts/loop-demo.mjs` | One loop on pool A, a step per signal, for a screen recording: fee to 10% (marked), back to 0.05% (mark kept), reopen. Each run replaces its record (`OUT`), by default the video's | Base Sepolia |
 | `scripts/chain.mjs` | The JSON-RPC reads, forge runs, reaction lookup and mark wait the three scripts above share | — |
 | `scripts/report.mjs` | Turns a measurement into `deployments/reflex-page.json` and this README's latency table (no key) | — |
 
