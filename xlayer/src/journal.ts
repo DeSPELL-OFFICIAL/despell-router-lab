@@ -13,11 +13,24 @@
 //     not give back the recorded proposal is counted as not replayable instead of guessed.
 //   - No lane. A lane is decided per trade and is not journaled, so a replay compares the stage only; the lane-only pins
 //     (operator block, card age, amount) are fixed.
+//   - Families the circuit does not know. The circuit holds the server's rules as of 2026-11-25 UTC; a pool whose family
+//     was added to the server later is judged by a newer rule, and its steps are counted apart, not replayed.
 //
 // Pure module: no I/O.
 
 import { probeFactsFrom } from "./measure.ts";
-import { CHANGE_KINDS, FAMILIES, proposedStage, STAGES, type ChangeKind, type Decision, type Family, type JudgmentInput, type Stage } from "./rule.ts";
+import {
+  CHANGE_KINDS,
+  CODE_CHANGE_KINDS,
+  FAMILIES,
+  proposedStage,
+  STAGES,
+  type ChangeKind,
+  type Decision,
+  type Family,
+  type JudgmentInput,
+  type Stage,
+} from "./rule.ts";
 
 /** The only chain the patrol judges: GIWA Sepolia. */
 export const JOURNAL_CHAIN_ID = 91342;
@@ -138,6 +151,27 @@ const asChange = (value: unknown): ChangeKind | null => ((CHANGE_KINDS as readon
 /** Reasons that mean the judgment came from a full review (the server's `scopeOfTrigger`): first seen, requested, or a code change. */
 const FULL_REVIEW_REASONS: ReadonlySet<string> = new Set(["first_seen", "full_review_requested", "code_changed", "token_code_changed", "implementation_changed"]);
 
+/** Stages the server never reviews in part (`aiGate`): a pool that was never opened, or is blocked, gets a full review. */
+const FULL_REVIEW_STAGES: ReadonlySet<Stage> = new Set<Stage>(["unknown", "blocked"]);
+
+/**
+ * Whether the judgment came from a full review, as the server's gate decides it (`aiGate`): requested, first seen, a
+ * card stage before the reflex of `unknown` or `blocked`, or a code change among the changes. The journal does not
+ * record the scope, so it is rebuilt from the judge line's reason, the stage before the reflex and the changes.
+ */
+export function fullReviewOf(reason: string, stageBeforeReflex: Stage, changes: ReadonlySet<ChangeKind>): boolean {
+  return FULL_REVIEW_REASONS.has(reason) || FULL_REVIEW_STAGES.has(stageBeforeReflex) || CODE_CHANGE_KINDS.some((kind) => changes.has(kind));
+}
+
+/**
+ * How a step moved, so a replay is not counted only on steps where nothing could differ:
+ *   - judged: a judgment was applied (the step has a trust transition line);
+ *   - reflex_only: no judgment, at least one reflex fired;
+ *   - unchanged: no judgment and no reflex (no change, a change with no reflex, a watch-only first reading).
+ */
+export const STEP_KINDS = ["judged", "reflex_only", "unchanged"] as const;
+export type StepKind = (typeof STEP_KINDS)[number];
+
 /**
  * A proposal read back as a decision (`decisionOfProposedState`): blocked is block, restricted or unknown is restrict,
  * probation or trusted is allow. A proposal that could not open anything was lowered to the current stage, so the read
@@ -164,11 +198,14 @@ export type EncodedStep =
   | {
       readonly kind: "replayable";
       readonly step: PatrolStep;
+      readonly stepKind: StepKind;
       readonly input: JudgmentInput;
       /** The stage the server wrote after the step. */
       readonly serverStage: Stage;
     }
-  | { readonly kind: "not_replayable"; readonly step: PatrolStep; readonly reason: NotReplayableReason };
+  | { readonly kind: "not_replayable"; readonly step: PatrolStep; readonly reason: NotReplayableReason }
+  /** The pool's family is not one the circuit knows: the server judged it by a rule newer than the circuit. */
+  | { readonly kind: "newer_rule"; readonly step: PatrolStep; readonly family: string };
 
 /**
  * One patrol step → circuit input and the server's stage after it.
@@ -179,15 +216,19 @@ export type EncodedStep =
  *   - decision: null when the step has no trust transition line. That covers every step the AI did not judge: no change,
  *     a watch-only family, a deferred or cut review, a read that came back blocked. A pool under an operator block is
  *     not read at all and has no step.
- *   - decision, full review, admin handle restrict: read back from the judge's proposal and the line's reason, then
- *     checked: the rule's proposal from those bits must equal the recorded one, or the step is not replayable.
+ *   - decision: read back from the judge's proposal. Full review: rebuilt as the server's gate decides it
+ *     (`fullReviewOf`). Admin handle restrict: the only path to `restricted` from `unknown`. Then checked: the rule's
+ *     proposal from those bits must equal the recorded one, or the step is not replayable.
  *   - token permissions (pin 18): clear only when both the judge's reading and this step's reading are `clear`.
  *   - probe facts: the trust transition line's numbers, judged as the server judges them (`probeFactsFrom`).
- *   - family: the pool card's family.
+ *   - family: the pool card's family. A family outside the circuit's list (added to the server after it) makes the step
+ *     `newer_rule`: counted apart, not replayed, never a difference.
  *   - operator block, card age, amount: lane-only pins, fixed (false, fresh, within cap). The journal has no lane.
  */
 export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, string>): EncodedStep {
   const notReplayable = (reason: NotReplayableReason): EncodedStep => ({ kind: "not_replayable", step, reason });
+  const recorded = families.get(step.pool);
+  if (recorded !== undefined && asFamily(recorded) === null) return { kind: "newer_rule", step, family: recorded };
   const reflex = step.lines.filter((line) => line.actor === "reflex");
   const probe = step.lines.find((line) => line.actor === "probe");
   if (!probe) return notReplayable("noProbeLine");
@@ -206,7 +247,7 @@ export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, strin
   const probeChange = asChange(probe.reason);
   if (probeChange) changes.add(probeChange);
 
-  const family = asFamily(families.get(step.pool));
+  const family = asFamily(recorded);
   const fixed = { operatorBlocked: false, cardFresh: true, amountWithinCap: true } as const;
   const noProbe = { lossUnderReflexLine: false, hiddenLossWithinOpenLimit: false, sellNotReverted: false, codeHashMatches: false };
 
@@ -222,17 +263,17 @@ export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, strin
       probe: noProbe,
       ...fixed,
     };
-    return { kind: "replayable", step, input, serverStage };
+    return { kind: "replayable", step, stepKind: reflex.length > 0 ? "reflex_only" : "unchanged", input, serverStage };
   }
 
   if (judge === null) return notReplayable("noJudgeLine");
   const proposal = asStage(trust.evidence.proposedState);
   const afterReflex = asStage(trust.before);
   if (proposal === null || afterReflex === null) return notReplayable("proposalUnreadable");
-  if (families.get(step.pool) === undefined) return notReplayable("noFamily");
+  if (recorded === undefined) return notReplayable("noFamily");
 
   const decision = decisionOfProposal(proposal);
-  const fullReview = FULL_REVIEW_REASONS.has(judge.reason);
+  const fullReview = fullReviewOf(judge.reason, stage, changes);
   const judgeClear = judge.evidence.tokenPermissionStatus === "clear";
   const liveClear = trust.evidence.tokenPermissionStatus === "clear";
   // The only way a restrict proposes `restricted` from `unknown` is the admin handle path.
@@ -256,7 +297,7 @@ export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, strin
     }),
     ...fixed,
   };
-  return { kind: "replayable", step, input, serverStage };
+  return { kind: "replayable", step, stepKind: "judged", input, serverStage };
 }
 
 /** Every step of an export, encoded, plus the lines that are not patrol steps. */

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ARTIFACT_URL } from "../src/artifact.ts";
 import { decodeInput, encodeOutput } from "../src/bits.ts";
-import { encodeJournal, encodeStep, parseJournalExport, patrolSteps, type EncodedStep, type JournalExport } from "../src/journal.ts";
+import { encodeJournal, encodeStep, fullReviewOf, parseJournalExport, patrolSteps, type EncodedStep, type JournalExport } from "../src/journal.ts";
 import { decodeNetlist, evaluate, fromHex } from "../src/netlist.ts";
 import { formatReplay, replayJournal } from "../src/replay.ts";
 import { judge, patrolStage } from "../src/rule.ts";
@@ -45,7 +45,7 @@ test("an export is checked before anything is replayed", () => {
 
 test("lines group into patrol steps; operator lines are not steps", () => {
   const { steps, other } = patrolSteps(sample());
-  assert.equal(steps.length, 13);
+  assert.equal(steps.length, 15);
   assert.deepEqual(
     other.map((line) => line.actor),
     ["operator"],
@@ -104,6 +104,19 @@ test("the encoder follows the DES-704 notes: skipped pools get decision 0, pin 1
   assert.equal(partial.input.fullReview, false);
   assert.equal(partial.serverStage, "restricted");
 
+  // A reused judgment on a pool never opened: the reason reads as no change, but the gate reviews an unknown pool in full.
+  const reused = replayable(stepOf(encoded, "8", "2026-11-21T01:10:00.000Z"));
+  assert.equal(reused.input.fullReview, true);
+  assert.equal(reused.input.decision, "allow");
+  assert.equal(reused.stepKind, "judged");
+  assert.equal(reused.serverStage, "probation");
+
+  // Step kinds: judged, reflex only, unchanged.
+  assert.equal(replayable(stepOf(encoded, "1", "2026-11-20T01:00:00.000Z")).stepKind, "judged");
+  assert.equal(deferred.stepKind, "reflex_only");
+  assert.equal(stale.stepKind, "unchanged");
+  assert.equal(watchOnly.stepKind, "unchanged");
+
   // The lane-only pins are fixed: the journal has no lane.
   for (const item of encoded) {
     if (item.kind !== "replayable") continue;
@@ -113,9 +126,33 @@ test("the encoder follows the DES-704 notes: skipped pools get decision 0, pin 1
   }
 });
 
+test("a full review is rebuilt as the server's gate decides it: reason, stage before the reflex, or a code change", () => {
+  const none = new Set<never>();
+  assert.equal(fullReviewOf("first_seen", "probation", none), true);
+  assert.equal(fullReviewOf("full_review_requested", "trusted", none), true);
+  assert.equal(fullReviewOf("no_change", "unknown", none), true);
+  assert.equal(fullReviewOf("no_change", "blocked", none), true);
+  assert.equal(fullReviewOf("fee_changed", "trusted", new Set(["fee_changed", "token_code_changed"] as const)), true);
+  assert.equal(fullReviewOf("fee_changed", "restricted", new Set(["fee_changed"] as const)), false);
+  assert.equal(fullReviewOf("no_change", "probation", none), false);
+});
+
+test("a family the circuit does not know is a newer rule: counted apart, never a difference", () => {
+  const { encoded } = encodeJournal(sample());
+  const later = stepOf(encoded, "b", "2026-11-26T09:00:00.000Z");
+  assert.equal(later.kind, "newer_rule");
+  assert.equal(later.kind === "newer_rule" && later.family, "joseon_v2");
+  // Replayed anyway, the circuit (which never opens a family outside its list) would keep the pool shut that the
+  // server opened: a difference that is only the circuit's age.
+  const journal = sample();
+  const asKnown = new Map(journal.pools.map((entry) => [entry.pool, entry.pool === pool("b") ? "pancake_infinity_cl" : entry.family] as const));
+  const forced = replayable(encodeStep(later.step, asKnown));
+  assert.notEqual(patrolStage(forced.input), forced.serverStage);
+});
+
 test("steps the journal cannot rebuild are counted apart, never guessed", () => {
   const { encoded } = encodeJournal(sample());
-  const reused = stepOf(encoded, "8", "2026-11-21T01:10:00.000Z");
+  const reused = stepOf(encoded, "a", "2026-11-21T01:20:00.000Z");
   assert.equal(reused.kind === "not_replayable" && reused.reason, "proposalNotRecovered");
   const noProbe = stepOf(encoded, "9", "2026-11-21T01:15:00.000Z");
   assert.equal(noProbe.kind === "not_replayable" && noProbe.reason, "noProbeLine");
@@ -136,19 +173,24 @@ test("steps the journal cannot rebuild are counted apart, never guessed", () => 
 test("replaying the sample: the committed netlist and the rule function both give the server's stage on every replayable step", async () => {
   for (const circuit of [localCircuit, ruleFunction]) {
     const report = await replayJournal(sample(), circuit);
-    assert.equal(report.lines, 35);
-    assert.equal(report.steps, 13);
+    assert.equal(report.lines, 41);
+    assert.equal(report.steps, 15);
     assert.equal(report.otherLines, 1);
-    assert.equal(report.replayed, 11);
-    assert.equal(report.same, 11);
+    assert.equal(report.replayed, 12);
+    assert.equal(report.same, 12);
+    assert.deepEqual(report.byKind, { judged: { replayed: 8, same: 8 }, reflex_only: { replayed: 1, same: 1 }, unchanged: { replayed: 3, same: 3 } });
     assert.deepEqual(report.differences, []);
     assert.equal(report.notReplayable.proposalNotRecovered, 1);
     assert.equal(report.notReplayable.noProbeLine, 1);
+    assert.deepEqual(report.newerRule, [{ pool: pool("b"), at: "2026-11-26T09:00:00.000Z", family: "joseon_v2" }]);
     assert.ok(report.vectors <= report.replayed);
   }
   const text = formatReplay(await replayJournal(sample(), localCircuit));
-  assert.match(text, /^11 of 11 replayed patrol steps: the circuit's stage equals the server's\n/u);
+  // The headline counts judged steps only, so steps where nothing could differ do not swell it.
+  assert.match(text, /^8 of 8 judged patrol steps: the circuit's stage equals the server's\n/u);
+  assert.match(text, /\nby kind: judged 8 of 8 · reflex only 1 of 1 · unchanged 3 of 3 · all 12 of 12\n/u);
   assert.match(text, /not replayable, the recorded decision does not give back the recorded proposal: 1/u);
+  assert.match(text, /newer rule than the circuit, a family the circuit does not know \(joseon_v2\): 1/u);
 });
 
 test("a difference is listed with the pool, the time, the server's stage and the circuit's", async () => {
@@ -159,13 +201,14 @@ test("a difference is listed with the pool, the time, the server's stage and the
     lines: journal.lines.map((line) => (line.pool === pool("7") && line.actor === "trust_rule" ? { ...line, after: "probation" } : line)),
   };
   const report = await replayJournal(tampered, localCircuit);
-  assert.equal(report.same, 10);
+  assert.equal(report.same, 11);
+  assert.deepEqual(report.byKind.judged, { replayed: 8, same: 7 });
   assert.deepEqual(
-    report.differences.map(({ pool: p, at, server, circuit }) => ({ p, at, server, circuit })),
-    [{ p: pool("7"), at: "2026-11-21T01:05:00.000Z", server: "probation", circuit: "restricted" }],
+    report.differences.map(({ pool: p, at, stepKind, server, circuit }) => ({ p, at, stepKind, server, circuit })),
+    [{ p: pool("7"), at: "2026-11-21T01:05:00.000Z", stepKind: "judged", server: "probation", circuit: "restricted" }],
   );
-  assert.match(formatReplay(report), /^10 of 11 replayed/u);
-  assert.match(formatReplay(report), new RegExp(`${pool("7")}  2026-11-21T01:05:00.000Z  server probation  circuit restricted`, "u"));
+  assert.match(formatReplay(report), /^7 of 8 judged/u);
+  assert.match(formatReplay(report), new RegExp(`${pool("7")}  2026-11-21T01:05:00.000Z  judged  server probation  circuit restricted`, "u"));
 
   // A circuit that answers wrongly is caught the same way.
   const broken = (vector: number) => encodeOutput({ ...judge(decodeInput(vector)), stage: "trusted" });

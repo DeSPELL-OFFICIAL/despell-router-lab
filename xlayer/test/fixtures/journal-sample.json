@@ -589,6 +589,112 @@
       "before": "unknown",
       "after": "unknown",
       "fingerprint": "0x0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d"
+    },
+    {
+      "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "at": "2026-11-21T01:20:00.000Z",
+      "seq": 135,
+      "actor": "probe",
+      "detail": null,
+      "reason": "no_change",
+      "evidence": {},
+      "before": "restricted",
+      "after": "restricted",
+      "fingerprint": "0x0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e"
+    },
+    {
+      "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "at": "2026-11-21T01:20:00.000Z",
+      "seq": 136,
+      "actor": "role",
+      "detail": "judge",
+      "reason": "no_change",
+      "evidence": {
+        "reused": true,
+        "modelCalls": 0,
+        "proposedState": "probation",
+        "proposedCap": 0.32,
+        "tokenPermissionStatus": "clear",
+        "claims": null,
+        "aiSkip": "fingerprint_cached"
+      },
+      "before": "restricted",
+      "after": "restricted",
+      "fingerprint": "0x0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e"
+    },
+    {
+      "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "at": "2026-11-21T01:20:00.000Z",
+      "seq": 137,
+      "actor": "trust_rule",
+      "detail": null,
+      "reason": "trust_raised",
+      "evidence": {
+        "proposedState": "probation",
+        "proposedCap": 0.32,
+        "lossBps": 41,
+        "feeBps": 30,
+        "hiddenLossBps": 11,
+        "sellReverted": false,
+        "codeHashMatches": true,
+        "tokenPermissionStatus": "clear"
+      },
+      "before": "restricted",
+      "after": "probation",
+      "fingerprint": "0x0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e"
+    },
+    {
+      "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "at": "2026-11-26T09:00:00.000Z",
+      "seq": 138,
+      "actor": "probe",
+      "detail": null,
+      "reason": "first_seen",
+      "evidence": {},
+      "before": "unknown",
+      "after": "unknown",
+      "fingerprint": "0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+    },
+    {
+      "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "at": "2026-11-26T09:00:00.000Z",
+      "seq": 139,
+      "actor": "role",
+      "detail": "judge",
+      "reason": "first_seen",
+      "evidence": {
+        "reused": false,
+        "modelCalls": 1,
+        "proposedState": "probation",
+        "proposedCap": 0.32,
+        "tokenPermissionStatus": "clear",
+        "claims": null,
+        "aiSkip": null
+      },
+      "before": "unknown",
+      "after": "unknown",
+      "fingerprint": "0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+    },
+    {
+      "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "at": "2026-11-26T09:00:00.000Z",
+      "seq": 140,
+      "actor": "trust_rule",
+      "detail": null,
+      "reason": "trust_raised",
+      "evidence": {
+        "proposedState": "probation",
+        "proposedCap": 0.32,
+        "lossBps": 41,
+        "feeBps": 30,
+        "hiddenLossBps": 11,
+        "sellReverted": false,
+        "codeHashMatches": true,
+        "tokenPermissionStatus": "clear"
+      },
+      "before": "unknown",
+      "after": "probation",
+      "fingerprint": "0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
     }
   ],
   "pools": [
@@ -623,6 +729,14 @@
     {
       "pool": "0x8888888888888888888888888888888888888888",
       "family": "uniswap_v3"
+    },
+    {
+      "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "family": "uniswap_v3"
+    },
+    {
+      "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "family": "joseon_v2"
     }
   ]
 }

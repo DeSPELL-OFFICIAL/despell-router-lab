@@ -7,7 +7,7 @@ The DeSpell router watches every pool it might route a trade through. When somet
 | Inputs | 27 bits: the pool's stage, the ten changes the patrol can detect, operator block, the AI decision and its conditions, family, four probe facts, card age, amount |
 | Outputs | 5 bits: the stage the patrol writes next (3) and the lane a trade gets right now (2) |
 | Size | **157 NAND**, 1,099 bytes of netlist ([`circuit/pool-judgment.json`](circuit/pool-judgment.json)) |
-| Checked | Equal to the rule function on **all 134,217,728 input combinations** (2^27), and the rule function equal to the server's own code on every combination its functions take |
+| Checked | Equal to the rule function on **all 134,217,728 input combinations** (2^27), and the rule function equal to the server's own code on every combination its functions take, for the server's rules as of 2026-11-25 UTC (two pool families added the next day are outside the circuit: [What the circuit leaves out](#what-the-circuit-leaves-out)) |
 | On X Layer mainnet | **Circuit 1** on the DeSpell processor [`0x3A49E01c0080FF9F99B5Df164e7ac27941836603`](https://www.oklink.com/xlayer/address/0x3A49E01c0080FF9F99B5Df164e7ac27941836603), taped out 2026-11-26. The netlist read back from the chain is the committed one, and `eval` equals the rule function on all 64 samples ([On X Layer mainnet](#on-x-layer-mainnet)) |
 | Cost to tape out | **0.0129 OKB** in all for this tape-out, the swap for the factory's BEM fees included. On a processor that charges in OKB, like OrderGuard XL: **0.017 OKB** in fees (0.0013 + 157 × 0.0001), **0.01766 OKB** with the transistor mint's protocol fee |
 
@@ -26,7 +26,8 @@ The circuit is a second, public copy of the judgment. The server stays the one t
 | `src/onchain.ts` | Reads a TapeOut processor over JSON-RPC (`eval`, `netlist`, `circuitInfo`, fees) and gives the circuit's judgment for an input (`judgeOnChain`) |
 | `src/samples.ts` | Named and pseudo-random sample vectors with the rule's answers, for checking `eval` after a tape-out |
 | `src/journal.ts` | Reads the router journal in an export shape, groups it into patrol steps and turns each step into input bits and the stage the server wrote |
-| `src/replay.ts` | Replays those steps through a circuit (the netlist here, or `eval` on X Layer) and counts how many give the server's stage |
+| `src/replay.ts` | Replays those steps through a circuit (the netlist here, or `eval` on X Layer) and counts how many give the server's stage, by kind of step |
+| `src/replay-command.ts` | The replay command apart from the process, with its exit codes (0 same, 1 a difference, 2 nothing trustworthy to report) |
 | `scripts/build-circuit.ts` | Builds the netlist, checks it on every input, writes `circuit/pool-judgment.json` and `circuit/pool-judgment-samples.json` |
 | `scripts/check-onchain.ts` | Read-only X Layer checks: fees today, and the byte format against circuits already on chain |
 | `scripts/quote-bem.ts` | Fetches and checks a LI.FI quote for the OKB → BEM swap the tape-out needs (a read; nothing is sent) |
@@ -40,7 +41,7 @@ This folder is one package of the repository's pnpm workspace, so `pnpm install`
 
 ```bash
 pnpm install              # at the repository root
-pnpm test                 # 44 tests, including the 2^27 comparison (about 16 s on 12 threads)
+pnpm test                 # 50 tests, including the 2^27 comparison (about 16 s on 12 threads)
 pnpm typecheck
 pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
 pnpm check:circuit        # fail if the committed netlist or samples are out of date
@@ -259,17 +260,20 @@ node scripts/replay-journal.ts --file <export.json>           # the committed ne
 node scripts/replay-journal.ts --file <export.json> --chain   # eval on X Layer, circuit 1 on the DeSpell processor
 ```
 
+The first line of the report counts **judged steps**, where the AI's judgment was applied and the circuit has to rebuild the whole transition: "M of N judged patrol steps". The next line gives the other two kinds on their own, so they do not swell that count: **reflex only** (no judgment, at least one reflex fired) and **unchanged** (no judgment, no reflex). Then come every difference (pool, time, kind, server stage, circuit stage), every step that could not be replayed and every step judged by a newer rule, each with its reason. The command exits 0 when no replayed step differs, 1 when one does, and 2 when it has nothing trustworthy to report: bad arguments, an export that fails its checks, or, with `--chain`, no circuit at that id, an address with no code, a circuit that is not the committed one, another chain, or the RPC failing part way.
+
 The journal lives in the router's private database. Nothing in this repository connects to it: whoever can read it exports the lines to a JSON file in the shape `src/journal.ts` checks (`JournalExport`: chain, lines, and each pool's family from its card), and the script reads that file.
 
 What a replay checks, and what it does not:
 
 - **The stage only.** A lane is decided per trade and is not journaled, so the lane is not compared. The lane-only pins (operator block, card age, amount) are fixed.
-- **The decision is read back from the proposal.** The journal records the judge's proposal (the stage it proposed), not the AI's raw decision. The decision bits are read back the way the server reads its own journal: the decision from the proposed stage, a full review from the line's reason, and the admin handle path as the only restrict that proposes `restricted` from `unknown`. So a replay checks the reflex and the trust transition (`applyReflex`, `nextTrustState`) on real steps; the step from the AI's raw decision to its proposal is checked only as far as those bits give back the recorded proposal.
+- **The decision is read back from the proposal.** The journal records the judge's proposal (the stage it proposed), not the AI's raw decision. The decision bits are read back the way the server reads its own journal: the decision from the proposed stage; a full review as the server's gate decides it (the line's reason, a card stage before the reflex of `unknown` or `blocked`, or a code change among the changes); and the admin handle path as the only restrict that proposes `restricted` from `unknown`. So a replay checks the reflex and the trust transition (`applyReflex`, `nextTrustState`) on real steps; the step from the AI's raw decision to its proposal is checked only as far as those bits give back the recorded proposal.
 - **Not replayable is counted apart.** A step whose bits do not give back the recorded proposal, or that misses a line the encoding needs, is listed by reason and left out of "M of N". Nothing is guessed.
+- **A newer rule is counted apart.** The circuit holds the server's rules as of 2026-11-25 UTC. A step of a pool whose family the circuit does not know was judged by a rule added later; it is listed with its family and left out of "M of N", never counted as a difference.
 - **Steps the AI did not judge are replayed with no decision**: no change, a watch-only family, a deferred or cut review. A pool under an operator block is not read by the patrol, so it has no step.
 - **Pin 18** is clear only when the judge's token reading and the step's own reading are both clear (the server proposes with the first and applies with the second).
 
-`test/fixtures/journal-sample.json` is made up: 35 lines covering those cases, including one step of each kind that cannot be replayed. On it the committed netlist and `eval` on X Layer both give the server's stage on 11 of 11 replayable steps; the tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference.
+`test/fixtures/journal-sample.json` is made up: 41 lines covering those cases, with two steps that cannot be replayed (a step with no probe line, and a reused judgment whose proposal the journal's bits do not give back) and one step of a family added later. On it the committed netlist and `eval` on X Layer both give the server's stage on 8 of 8 judged steps (1 of 1 reflex only, 3 of 3 unchanged). The tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference, and that each exit code comes from its case.
 
 ## What the circuit leaves out
 
@@ -280,6 +284,7 @@ What a replay checks, and what it does not:
 - **When the patrol skips a pool.** A pool whose card is under an operator block is not read at all; a pool whose new reading is blocked, or whose review is deferred, gets the reflex and no AI decision (decision 0). The circuit answers for every input, including combinations the patrol never produces, so whoever builds its inputs puts decision 0 for a pool the patrol skipped.
 - **A pool never seen.** It has no card; the circuit takes it as a card at unknown with no changes. The server's lane agrees for every case above. It would differ only for a card-less pool with a reverted sell, which cannot happen: changes come from comparing a reading with a card.
 - **Chain.** The patrol only judges GIWA Sepolia (chain 91342). The circuit lives on X Layer; the pools it judges do not.
+- **Families added later.** On 2026-11-26 the server's patrol added two V2-style pair families, `joseon_v2` and `naru_v2`, both openable. Circuit 1 knows the three families before that; to it any other family is outside the list and never opens. Covering them takes a new circuit with a new id (Source, below); until then a replay counts their steps apart as a newer rule.
 
 ## Source
 
