@@ -16,7 +16,9 @@ import { BASE_SEPOLIA } from "@/lib/swap/chains";
   "Left out" row; with every pool marked, the card stops with no route. The
   marks are read every 2 seconds; a read more than 6 seconds old turns the
   sign button off; and signing reads them again right before each
-  transaction, stopping if the pool the plan swaps through is marked.
+  transaction, stopping if the pool the plan swaps through is marked. A mark
+  that lands while the wallet's window is open is not seen until the next
+  transaction; the plan's deadline bounds how long that window can be.
 */
 
 const MARKS_KEY = ["pool-marks", BASE_SEPOLIA.id] as const;
@@ -32,7 +34,10 @@ export function MarkedPoolSwap() {
     retry: 1,
   });
   // The gate ages the last read by this clock, so a read that stopped coming closes it without a new render cause.
-  const [now, setNow] = useState(0);
+  // It starts at the real time: a read cached from an earlier visit must not look fresh on the first render.
+  const [now, setNow] = useState(Date.now);
+  // While the card signs, the read right before each transaction decides instead of the read's age (see markGate).
+  const [signing, setSigning] = useState(false);
   useEffect(() => {
     const tick = () => setNow(Date.now());
     tick();
@@ -55,10 +60,11 @@ export function MarkedPoolSwap() {
     <SwapCard
       chain={BASE_SEPOLIA}
       amountIn={DEMO_USDC}
-      gate={markGate(read, marksQ.isError, BASE_SEPOLIA, now)}
+      gate={markGate(read, marksQ.isError, BASE_SEPOLIA, now, signing)}
       leaveOut={read ? out.map((m) => m.pool.id) : null}
       recheckLeaveOut={recheck}
       extraRows={rows}
+      onBusyChange={setSigning}
     />
   );
 }

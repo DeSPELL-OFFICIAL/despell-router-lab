@@ -34,9 +34,39 @@ it pays a little less, so the quote takes A while both are open.
 | --- | --- |
 | Pool id | `0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2` |
 | Pool key | as pool A, with tick spacing 60 |
+| Start | tick −202170 (pool A's price at block 63680065) · LP fee 500 (0.05%) |
+| Liquidity | 0.01 ETH, position 34387, ticks −202140 to −201900 |
 | Opened by | `reflex/scripts/route-demo.mjs`; its transactions go to [`deployments/route-demo-base-sepolia.json`](deployments/route-demo-base-sepolia.json) |
 
 Opening a pool emits `FeeUpdated(0 → 500)`, and PoolReflex marks every new pool narrowed until the operator reopens it.
+
+#### The route demo (2026-11-26)
+
+`route-demo.mjs` opened pool B, then held the app's `/reactive` card in three states while it was captured. Every
+transaction is on Base Sepolia, sent by the hook and PoolGuard owner. The marks are PoolGuard's callbacks from
+Reactive Network.
+
+| Step | Transaction | Block | PoolGuard's answer |
+| --- | --- | --- | --- |
+| Open pool B · `Initialize`, `FeeUpdated(0 → 500)` | [`0x454e818d…6367`](https://sepolia.basescan.org/tx/0x454e818dd215919c0e59d1c4169be131aca2f6390c838dcce0b85e72a27d6367) | 63680065 | narrowed (2), [`0x5a6aabce…1b67`](https://sepolia.basescan.org/tx/0x5a6aabcedafaf8084df8df9b843a30a1b6e90d3d64c21e2422a724515a421b67) · 6 blocks |
+| Seed pool B with 0.01 ETH (position 34387) | [`0xe7147e4d…1959`](https://sepolia.basescan.org/tx/0xe7147e4dd657d425ed16ba23161abb66868ff10a2e6ab0cb12a7e9e911671959) | 63680069 | — |
+| Pool A fee 0.05% → 10% | [`0xf4edd3e5…c98c`](https://sepolia.basescan.org/tx/0xf4edd3e54c4dcce01d029331b3099606a135aaf00c0c72869e4ce092da98c98c) | 63680118 | narrowed (2), [`0xb6c2abda…73a4`](https://sepolia.basescan.org/tx/0xb6c2abdaabd2c58ef9aab89642146f3b527129e585c03cf72edbda1c4ba173a4) · 7 blocks |
+| Reopen pool B | [`0x8a1323bc…16eb`](https://sepolia.basescan.org/tx/0x8a1323bc92f8b8fe3fa93d4b1bc5650c9f7f3833079ecd843791eafe771d16eb) | 63685019 | — |
+| Pool A fee 10% → 0.05% | [`0x2786376c…5b82`](https://sepolia.basescan.org/tx/0x2786376c7fa5c38d8cbb9586f146299c9bdec5aa711d5877ca25b2e710145b82) | 63685173 | kept narrowed (`MarkKept`), [`0x9f038c6e…8254`](https://sepolia.basescan.org/tx/0x9f038c6e15427db6046c9cd868eb733b940e96374720a37184edbb1c10db8254) · 5 blocks |
+| Reopen pool A | [`0x52725fac…0ba8`](https://sepolia.basescan.org/tx/0x52725facddf302bebb09e9d4dfa096c2898e270a1cefe3e717420816a6b40ba8) | 63685227 | — |
+
+| State | Status A · B | The card, 10 USDC → ETH |
+| --- | --- | --- |
+| no-route | 2 · 2 | Route None, a "Left out" row for each pool, "No route · every pool is marked on-chain" |
+| left-out | 2 · 0 | Route test pool B, +0.00595765 ETH, a "Left out" row for pool A |
+| both-open | 0 · 0 | Route test pool A, +0.0060092 ETH (A pays more) |
+
+Both pools ended at 0.05% and open.
+
+What the card cannot catch: it reads the marks right before it asks the wallet for each transaction, so a mark that
+lands while the wallet's window is open is seen only before the next one. The plan's deadline bounds how long that
+window can be. Between a plan's transactions, that read also decides in place of the 6-second age rule, so a gap in
+the polling does not stop a swap after its approval.
 
 ### The event a Reactive contract subscribes to
 
