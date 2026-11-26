@@ -1,5 +1,5 @@
 {
-  "note": "Made-up journal lines in the export shape, for tests and for trying the replay. Not router journal data.",
+  "note": "Made-up journal lines in the export shape, for tests and for trying the replay. Not router journal data. Pool 0xaaaa… is made up to show how a recorded proposal outside the circuit's rules is reported as a difference.",
   "chainId": 91342,
   "lines": [
     {

@@ -71,26 +71,38 @@ function deps(node: Node = {}, files: Record<string, string> = {}): ReplayComman
 }
 
 const samplePath = SAMPLE.pathname;
+const sampleJournal = () => JSON.parse(readFileSync(SAMPLE, "utf8")) as { lines: { pool: string; actor: string; after: string }[] };
+/** The sample without its made-up line whose proposal is outside the rules: every replayed step is the server's. */
+const clean = (() => {
+  const journal = sampleJournal();
+  journal.lines = journal.lines.filter((line) => line.pool !== `0x${"a".repeat(40)}`);
+  return JSON.stringify(journal);
+})();
 
 test("0: every replayed step gives the server's stage, here and through eval", async () => {
-  const local = await replayCommand(["--file", samplePath], deps());
+  const local = await replayCommand(["--file", "clean.json"], deps({}, { "clean.json": clean }));
   assert.equal(local.code, 0, local.stderr);
   assert.match(local.stdout, /^8 of 8 judged patrol steps/u);
   assert.match(local.stdout, /circuit: the committed netlist/u);
 
-  const withOut = deps();
-  const chain = await replayCommand(["--file", samplePath, "--chain", "--out", "report.txt"], withOut);
+  const withOut = deps({}, { "clean.json": clean });
+  const chain = await replayCommand(["--file", "clean.json", "--chain", "--out", "report.txt"], withOut);
   assert.equal(chain.code, 0, chain.stderr);
   assert.match(chain.stdout, new RegExp(`circuit: eval on X Layer \\(chain 196\\), processor ${TAPED_OUT.processor}, circuit #1`, "u"));
   assert.equal(withOut.written.get("report.txt"), chain.stdout);
 });
 
-test("1: a replayed step differs", async () => {
-  const journal = JSON.parse(readFileSync(SAMPLE, "utf8")) as { lines: { pool: string; actor: string; after: string }[] };
+test("1: a replayed step differs, in its stage or in a proposal outside the circuit's rules", async () => {
+  const journal = JSON.parse(clean) as { lines: { pool: string; actor: string; after: string }[] };
   for (const line of journal.lines) if (line.pool === `0x${"7".repeat(40)}` && line.actor === "trust_rule") line.after = "probation";
   const result = await replayCommand(["--file", "tampered.json"], deps({}, { "tampered.json": JSON.stringify(journal) }));
   assert.equal(result.code, 1);
   assert.match(result.stdout, /^7 of 8 judged/u);
+
+  const outside = await replayCommand(["--file", samplePath], deps());
+  assert.equal(outside.code, 1);
+  assert.match(outside.stdout, /^8 of 9 judged/u);
+  assert.match(outside.stdout, /a recorded proposal outside the circuit's rules 1/u);
 });
 
 test("2: bad arguments or an export that fails its checks", async () => {

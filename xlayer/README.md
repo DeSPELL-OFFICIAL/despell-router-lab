@@ -41,7 +41,7 @@ This folder is one package of the repository's pnpm workspace, so `pnpm install`
 
 ```bash
 pnpm install              # at the repository root
-pnpm test                 # 50 tests, including the 2^27 comparison (about 16 s on 12 threads)
+pnpm test                 # 51 tests, including the 2^27 comparison (about 16 s on 12 threads)
 pnpm typecheck
 pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
 pnpm check:circuit        # fail if the committed netlist or samples are out of date
@@ -260,7 +260,7 @@ node scripts/replay-journal.ts --file <export.json>           # the committed ne
 node scripts/replay-journal.ts --file <export.json> --chain   # eval on X Layer, circuit 1 on the DeSpell processor
 ```
 
-The first line of the report counts **judged steps**, where the AI's judgment was applied and the circuit has to rebuild the whole transition: "M of N judged patrol steps". The next line gives the other two kinds on their own, so they do not swell that count: **reflex only** (no judgment, at least one reflex fired) and **unchanged** (no judgment, no reflex). Then come every difference (pool, time, kind, server stage, circuit stage), every step that could not be replayed and every step judged by a newer rule, each with its reason. The command exits 0 when no replayed step differs, 1 when one does, and 2 when it has nothing trustworthy to report: bad arguments, an export that fails its checks, or, with `--chain`, no circuit at that id, an address with no code, a circuit that is not the committed one, another chain, or the RPC failing part way.
+The first line of the report counts **judged steps**, where the AI's judgment was applied and the circuit has to rebuild the whole transition: "M of N judged patrol steps". The next line gives the other two kinds on their own, so they do not swell that count: **reflex only** (no judgment, at least one reflex fired) and **unchanged** (no judgment, no reflex). Then come every difference (pool, time, kind, reason, server stage, circuit stage), every step that could not be replayed and every step judged by a newer rule, each with its reason. The command exits 0 when no replayed step differs, 1 when one does, and 2 when it has nothing trustworthy to report: bad arguments, an export that fails its checks, or, with `--chain`, no circuit at that id, an address with no code, a circuit that is not the committed one, another chain, or the RPC failing part way.
 
 The journal lives in the router's private database. Nothing in this repository connects to it: whoever can read it exports the lines to a JSON file in the shape `src/journal.ts` checks (`JournalExport`: chain, lines, and each pool's family from its card), and the script reads that file.
 
@@ -268,12 +268,13 @@ What a replay checks, and what it does not:
 
 - **The stage only.** A lane is decided per trade and is not journaled, so the lane is not compared. The lane-only pins (operator block, card age, amount) are fixed.
 - **The decision is read back from the proposal.** The journal records the judge's proposal (the stage it proposed), not the AI's raw decision. The decision bits are read back the way the server reads its own journal: the decision from the proposed stage; a full review as the server's gate decides it (the line's reason, a card stage before the reflex of `unknown` or `blocked`, or a code change among the changes); and the admin handle path as the only restrict that proposes `restricted` from `unknown`. So a replay checks the reflex and the trust transition (`applyReflex`, `nextTrustState`) on real steps; the step from the AI's raw decision to its proposal is checked only as far as those bits give back the recorded proposal.
-- **Not replayable is counted apart.** A step whose bits do not give back the recorded proposal, or that misses a line the encoding needs, is listed by reason and left out of "M of N". Nothing is guessed.
+- **A proposal outside the rules is a difference.** When the circuit's rules do not give the recorded proposal from the journal's facts (a line written under an older rule, for instance), the step counts in "M of N" and as a difference, whatever the circuit answers. The report shows its time, pool, recorded proposal and the proposal the rules give, so a person can see what it is. Nothing is hidden from the count.
+- **Not replayable is counted apart.** A step that misses a line or a value the encoding needs (a probe line, the judge's line, a readable proposal, the pool's family) is listed by reason and left out of "M of N". Nothing is guessed.
 - **A newer rule is counted apart.** The circuit holds the server's rules as of 2026-11-25 UTC. A step of a pool whose family the circuit does not know was judged by a rule added later; it is listed with its family and left out of "M of N", never counted as a difference.
 - **Steps the AI did not judge are replayed with no decision**: no change, a watch-only family, a deferred or cut review. A pool under an operator block is not read by the patrol, so it has no step.
 - **Pin 18** is clear only when the judge's token reading and the step's own reading are both clear (the server proposes with the first and applies with the second).
 
-`test/fixtures/journal-sample.json` is made up: 41 lines covering those cases, with two steps that cannot be replayed (a step with no probe line, and a reused judgment whose proposal the journal's bits do not give back) and one step of a family added later. On it the committed netlist and `eval` on X Layer both give the server's stage on 8 of 8 judged steps (1 of 1 reflex only, 3 of 3 unchanged). The tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference, and that each exit code comes from its case.
+`test/fixtures/journal-sample.json` is made up: 41 lines covering those cases, with one step that cannot be replayed (no probe line), one reused judgment whose recorded proposal is outside the rules (made up to show how that difference is reported) and one step of a family added later. On it the committed netlist and `eval` on X Layer both report 8 of 9 judged steps, the one difference being that made-up line, and 1 of 1 reflex only, 3 of 3 unchanged; without that line, 8 of 8. The tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference, and that each exit code comes from its case.
 
 ## What the circuit leaves out
 

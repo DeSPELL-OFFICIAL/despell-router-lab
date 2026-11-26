@@ -9,8 +9,9 @@
 // What the journal records, and so what a replay can check:
 //   - The stage before and after the reflex, the changes that tightened it, and the stage after the step.
 //   - The judge's proposal (`proposedState`), not the AI's raw decision. The decision bits are read back the way the
-//     server reads its own journal (`decisionOfProposedState`, scope from the line's reason), and a step whose bits do
-//     not give back the recorded proposal is counted as not replayable instead of guessed.
+//     server reads its own journal (`decisionOfProposedState`, scope as the gate decides it). A recorded proposal the
+//     circuit's rules cannot give from those bits is a difference of its own kind (`proposalOutsideRules`), shown with
+//     the proposal the rules do give, never hidden.
 //   - No lane. A lane is decided per trade and is not journaled, so a replay compares the stage only; the lane-only pins
 //     (operator block, card age, amount) are fixed.
 //   - Families the circuit does not know. The circuit holds the server's rules as of 2026-11-25 UTC; a pool whose family
@@ -183,14 +184,13 @@ export function decisionOfProposal(proposal: Stage): Decision {
   return "allow";
 }
 
-/** Why a step cannot be replayed. Each is counted apart; none is guessed. */
+/** Why a step cannot be replayed: the journal misses what the encoding needs. Each is counted apart; none is guessed. */
 export const NOT_REPLAYABLE = {
   noProbeLine: "no probe line in the step",
   stageNotInList: "a stage outside the closed list",
   noJudgeLine: "a trust transition without the judge's line",
   proposalUnreadable: "the proposal is missing or outside the closed list",
   noFamily: "a judged pool with no card family",
-  proposalNotRecovered: "the recorded decision does not give back the recorded proposal",
 } as const;
 export type NotReplayableReason = keyof typeof NOT_REPLAYABLE;
 
@@ -202,6 +202,11 @@ export type EncodedStep =
       readonly input: JudgmentInput;
       /** The stage the server wrote after the step. */
       readonly serverStage: Stage;
+      /**
+       * Set when the recorded proposal is not one the circuit's rules give from the journal's facts (for instance a line
+       * written under an older rule). The step is then a difference whatever the circuit answers.
+       */
+      readonly proposalOutsideRules: { readonly recorded: Stage; readonly rules: Stage } | null;
     }
   | { readonly kind: "not_replayable"; readonly step: PatrolStep; readonly reason: NotReplayableReason }
   /** The pool's family is not one the circuit knows: the server judged it by a rule newer than the circuit. */
@@ -217,8 +222,8 @@ export type EncodedStep =
  *     a watch-only family, a deferred or cut review, a read that came back blocked. A pool under an operator block is
  *     not read at all and has no step.
  *   - decision: read back from the judge's proposal. Full review: rebuilt as the server's gate decides it
- *     (`fullReviewOf`). Admin handle restrict: the only path to `restricted` from `unknown`. Then checked: the rule's
- *     proposal from those bits must equal the recorded one, or the step is not replayable.
+ *     (`fullReviewOf`). Admin handle restrict: the only path to `restricted` from `unknown`. Then checked: when the
+ *     rule's proposal from those bits is not the recorded one, the step carries `proposalOutsideRules`.
  *   - token permissions (pin 18): clear only when both the judge's reading and this step's reading are `clear`.
  *   - probe facts: the trust transition line's numbers, judged as the server judges them (`probeFactsFrom`).
  *   - family: the pool card's family. A family outside the circuit's list (added to the server after it) makes the step
@@ -263,7 +268,7 @@ export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, strin
       probe: noProbe,
       ...fixed,
     };
-    return { kind: "replayable", step, stepKind: reflex.length > 0 ? "reflex_only" : "unchanged", input, serverStage };
+    return { kind: "replayable", step, stepKind: reflex.length > 0 ? "reflex_only" : "unchanged", input, serverStage, proposalOutsideRules: null };
   }
 
   if (judge === null) return notReplayable("noJudgeLine");
@@ -278,8 +283,9 @@ export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, strin
   const liveClear = trust.evidence.tokenPermissionStatus === "clear";
   // The only way a restrict proposes `restricted` from `unknown` is the admin handle path.
   const adminHandleRestrict = decision === "restrict" && proposal === "restricted" && afterReflex === "unknown";
-  // The server proposed with the judge's token reading; the rule must give back the same proposal from these bits.
-  if (proposedStage(decision, afterReflex, fullReview, judgeClear, adminHandleRestrict) !== proposal) return notReplayable("proposalNotRecovered");
+  // The server proposed with the judge's token reading; the rules should give back the same proposal from these bits.
+  const rulesProposal = proposedStage(decision, afterReflex, fullReview, judgeClear, adminHandleRestrict);
+  const proposalOutsideRules = rulesProposal === proposal ? null : { recorded: proposal, rules: rulesProposal };
 
   const input: JudgmentInput = {
     stage,
@@ -297,7 +303,7 @@ export function encodeStep(step: PatrolStep, families: ReadonlyMap<string, strin
     }),
     ...fixed,
   };
-  return { kind: "replayable", step, stepKind: "judged", input, serverStage };
+  return { kind: "replayable", step, stepKind: "judged", input, serverStage, proposalOutsideRules };
 }
 
 /** Every step of an export, encoded, plus the lines that are not patrol steps. */

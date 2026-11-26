@@ -150,10 +150,27 @@ test("a family the circuit does not know is a newer rule: counted apart, never a
   assert.notEqual(patrolStage(forced.input), forced.serverStage);
 });
 
+test("a recorded proposal the circuit's rules cannot give is kept as a difference, with both proposals", async () => {
+  const { encoded } = encodeJournal(sample());
+  const outside = replayable(stepOf(encoded, "a", "2026-11-21T01:20:00.000Z"));
+  assert.equal(outside.stepKind, "judged");
+  assert.deepEqual(outside.proposalOutsideRules, { recorded: "probation", rules: "restricted" });
+  const report = await replayJournal(sample(), localCircuit);
+  const difference = report.differences.find((d) => d.pool === pool("a"));
+  assert.deepEqual(difference && { reason: difference.reason, proposal: difference.proposal, server: difference.server, circuit: difference.circuit }, {
+    reason: "proposal_outside_rules",
+    proposal: { recorded: "probation", rules: "restricted" },
+    server: "probation",
+    circuit: "restricted",
+  });
+  // It counts in the denominator and is a difference even if the circuit's stage happened to match the server's.
+  const lucky = await replayJournal(sample(), (vector) => (vector === difference!.vector ? encodeOutput({ ...judge(decodeInput(vector)), stage: "probation" }) : localCircuit(vector)));
+  assert.equal(lucky.differences.find((d) => d.pool === pool("a"))?.reason, "proposal_outside_rules");
+  assert.deepEqual(lucky.byKind.judged, { replayed: 9, same: 8 });
+});
+
 test("steps the journal cannot rebuild are counted apart, never guessed", () => {
   const { encoded } = encodeJournal(sample());
-  const reused = stepOf(encoded, "a", "2026-11-21T01:20:00.000Z");
-  assert.equal(reused.kind === "not_replayable" && reused.reason, "proposalNotRecovered");
   const noProbe = stepOf(encoded, "9", "2026-11-21T01:15:00.000Z");
   assert.equal(noProbe.kind === "not_replayable" && noProbe.reason, "noProbeLine");
 
@@ -170,26 +187,31 @@ test("steps the journal cannot rebuild are counted apart, never guessed", () => 
   assert.equal((encodeStep(noJudge, all) as { reason?: string }).reason, "noJudgeLine");
 });
 
-test("replaying the sample: the committed netlist and the rule function both give the server's stage on every replayable step", async () => {
+test("replaying the sample: the committed netlist and the rule function both give the server's stage on every step the rules cover", async () => {
   for (const circuit of [localCircuit, ruleFunction]) {
     const report = await replayJournal(sample(), circuit);
     assert.equal(report.lines, 41);
     assert.equal(report.steps, 15);
     assert.equal(report.otherLines, 1);
-    assert.equal(report.replayed, 12);
+    assert.equal(report.replayed, 13);
     assert.equal(report.same, 12);
-    assert.deepEqual(report.byKind, { judged: { replayed: 8, same: 8 }, reflex_only: { replayed: 1, same: 1 }, unchanged: { replayed: 3, same: 3 } });
-    assert.deepEqual(report.differences, []);
-    assert.equal(report.notReplayable.proposalNotRecovered, 1);
-    assert.equal(report.notReplayable.noProbeLine, 1);
+    assert.deepEqual(report.byKind, { judged: { replayed: 9, same: 8 }, reflex_only: { replayed: 1, same: 1 }, unchanged: { replayed: 3, same: 3 } });
+    // The one difference is the made-up line whose proposal is outside the rules.
+    assert.deepEqual(
+      report.differences.map((d) => [d.pool, d.reason]),
+      [[pool("a"), "proposal_outside_rules"]],
+    );
+    assert.deepEqual(report.notReplayable, { noProbeLine: 1, stageNotInList: 0, noJudgeLine: 0, proposalUnreadable: 0, noFamily: 0 });
     assert.deepEqual(report.newerRule, [{ pool: pool("b"), at: "2026-11-26T09:00:00.000Z", family: "joseon_v2" }]);
     assert.ok(report.vectors <= report.replayed);
   }
   const text = formatReplay(await replayJournal(sample(), localCircuit));
   // The headline counts judged steps only, so steps where nothing could differ do not swell it.
-  assert.match(text, /^8 of 8 judged patrol steps: the circuit's stage equals the server's\n/u);
-  assert.match(text, /\nby kind: judged 8 of 8 · reflex only 1 of 1 · unchanged 3 of 3 · all 12 of 12\n/u);
-  assert.match(text, /not replayable, the recorded decision does not give back the recorded proposal: 1/u);
+  assert.match(text, /^8 of 9 judged patrol steps: the circuit's stage equals the server's\n/u);
+  assert.match(text, /\nby kind: judged 8 of 9 · reflex only 1 of 1 · unchanged 3 of 3 · all 12 of 13\n/u);
+  assert.match(text, /differences 1: the circuit's stage 0 · a recorded proposal outside the circuit's rules 1/u);
+  assert.match(text, /proposal outside the rules: recorded probation, the circuit's rules give restricted from the journal's facts {2}server probation {2}circuit restricted/u);
+  assert.match(text, /not replayable, no probe line in the step: 1/u);
   assert.match(text, /newer rule than the circuit, a family the circuit does not know \(joseon_v2\): 1/u);
 });
 
@@ -202,13 +224,13 @@ test("a difference is listed with the pool, the time, the server's stage and the
   };
   const report = await replayJournal(tampered, localCircuit);
   assert.equal(report.same, 11);
-  assert.deepEqual(report.byKind.judged, { replayed: 8, same: 7 });
+  assert.deepEqual(report.byKind.judged, { replayed: 9, same: 7 });
   assert.deepEqual(
-    report.differences.map(({ pool: p, at, stepKind, server, circuit }) => ({ p, at, stepKind, server, circuit })),
+    report.differences.filter((d) => d.reason === "stage").map(({ pool: p, at, stepKind, server, circuit }) => ({ p, at, stepKind, server, circuit })),
     [{ p: pool("7"), at: "2026-11-21T01:05:00.000Z", stepKind: "judged", server: "probation", circuit: "restricted" }],
   );
-  assert.match(formatReplay(report), /^7 of 8 judged/u);
-  assert.match(formatReplay(report), new RegExp(`${pool("7")}  2026-11-21T01:05:00.000Z  judged  server probation  circuit restricted`, "u"));
+  assert.match(formatReplay(report), /^7 of 9 judged/u);
+  assert.match(formatReplay(report), new RegExp(`${pool("7")}  2026-11-21T01:05:00.000Z  judged  stage  server probation  circuit restricted`, "u"));
 
   // A circuit that answers wrongly is caught the same way.
   const broken = (vector: number) => encodeOutput({ ...judge(decodeInput(vector)), stage: "trusted" });
