@@ -6,9 +6,9 @@ import type { Judgment, JudgmentInput } from "@despell-lab/xlayer/src/rule.ts";
 
 /*
   The pool judgment circuit (xlayer/): the netlist committed in this
-  repository, and where it is taped out on X Layer. The processor and the
-  circuit id exist only after the tape-out (DES-699); until then they are
-  null and the app says the circuit is being prepared.
+  repository, and where it is taped out on X Layer (DES-699). Where it is
+  taped out is public, so it is written here; the environment can point the
+  app at another tape-out of the same netlist.
 */
 
 export const X_LAYER = {
@@ -46,9 +46,12 @@ export function evaluateLocally(input: JudgmentInput): { vector: number; outputs
 export type CircuitDeployment = { processor: Address; circuitId: bigint };
 
 /**
- * Where the circuit is taped out, from NEXT_PUBLIC_XLAYER_PROCESSOR and NEXT_PUBLIC_XLAYER_CIRCUIT_ID (public values,
- * set once DES-699 has taped it out). null when either is missing or malformed: the circuit is then "being prepared".
+ * The tape-out on X Layer mainnet (DES-699): circuit #1 on this processor. Public values. Whatever the app is pointed
+ * at, the circuit check reads the netlist back and holds the card unless it is the committed one.
  */
+export const TAPED_OUT: CircuitDeployment = { processor: "0x3A49E01c0080FF9F99B5Df164e7ac27941836603", circuitId: 1n };
+
+/** A processor address and a positive circuit id, or null when either is missing or malformed. */
 export function parseDeployment(processor: string | undefined, circuitId: string | undefined): CircuitDeployment | null {
   const p = processor?.trim();
   const id = circuitId?.trim();
@@ -56,5 +59,13 @@ export function parseDeployment(processor: string | undefined, circuitId: string
   return { processor: getAddress(p), circuitId: BigInt(id) };
 }
 
+/**
+ * NEXT_PUBLIC_XLAYER_PROCESSOR and NEXT_PUBLIC_XLAYER_CIRCUIT_ID override the tape-out when both are set and valid;
+ * otherwise the app uses TAPED_OUT, so a missing or mistyped setting never turns the check off.
+ */
+export function deploymentFrom(processor: string | undefined, circuitId: string | undefined): CircuitDeployment {
+  return parseDeployment(processor, circuitId) ?? TAPED_OUT;
+}
+
 // Written out literally so Next.js inlines the values into the browser bundle.
-export const DEPLOYMENT: CircuitDeployment | null = parseDeployment(process.env.NEXT_PUBLIC_XLAYER_PROCESSOR, process.env.NEXT_PUBLIC_XLAYER_CIRCUIT_ID);
+export const DEPLOYMENT: CircuitDeployment = deploymentFrom(process.env.NEXT_PUBLIC_XLAYER_PROCESSOR, process.env.NEXT_PUBLIC_XLAYER_CIRCUIT_ID);

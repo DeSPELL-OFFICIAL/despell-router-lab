@@ -53,16 +53,12 @@ export default async function Page(props: PageProps<"/xlayer/pools/[pool]">) {
           </dd>
           <dt>Processor</dt>
           <dd className="ds-mono">
-            {DEPLOYMENT ? (
-              <a href={`${X_LAYER.explorer}/address/${DEPLOYMENT.processor}`} target="_blank" rel="noreferrer">
-                {DEPLOYMENT.processor}
-              </a>
-            ) : (
-              "being prepared"
-            )}
+            <a href={`${X_LAYER.explorer}/address/${DEPLOYMENT.processor}`} target="_blank" rel="noreferrer">
+              {DEPLOYMENT.processor}
+            </a>
           </dd>
           <dt>Circuit ID</dt>
-          <dd className="ds-mono">{DEPLOYMENT ? `#${String(DEPLOYMENT.circuitId)}` : "being prepared"}</dd>
+          <dd className="ds-mono">#{String(DEPLOYMENT.circuitId)}</dd>
           <dt>NAND gates</dt>
           <dd>{CIRCUIT.nand}</dd>
           <dt>Pins</dt>
