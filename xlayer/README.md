@@ -237,7 +237,7 @@ The circuit was taped out on X Layer mainnet (chain 196) on 2026-11-26, from one
 All six succeeded. They spent 0.012936 OKB in all: 0.011593 for the swap, 0.0013 for the tape-out fee and 0.000043 for gas (2,155,630 gas at 0.02 gwei). That is about 1.05 USD at the swap quote's price. Both BEM approvals were used up, and 0.01395695 BEM is left over from the swap. Reading it back with `node scripts/check-tapeout.ts --processor 0x3A49E01c0080FF9F99B5Df164e7ac27941836603`:
 
 ```text
-processor 0x3a49e01c0080ff9f99b5df164e7ac27941836603, circuit #1: 27 in, 5 out, 157 NAND, state 0
+processor 0x3A49E01c0080FF9F99B5Df164e7ac27941836603, circuit #1: 27 in, 5 out, 157 NAND, state 0
 netlist on chain = circuit/pool-judgment.json: yes
 eval on X Layer = rule function on 64/64 samples
 ```
