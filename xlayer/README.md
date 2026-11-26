@@ -36,7 +36,7 @@ This folder is one package of the repository's pnpm workspace, so `pnpm install`
 
 ```bash
 pnpm install              # at the repository root
-pnpm test                 # 37 tests, including the 2^27 comparison (about 16 s on 12 threads)
+pnpm test                 # 44 tests, including the 2^27 comparison (about 16 s on 12 threads)
 pnpm typecheck
 pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
 pnpm check:circuit        # fail if the committed netlist or samples are out of date
