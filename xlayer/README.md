@@ -8,7 +8,8 @@ The DeSpell router watches every pool it might route a trade through. When somet
 | Outputs | 5 bits: the stage the patrol writes next (3) and the lane a trade gets right now (2) |
 | Size | **157 NAND**, 1,099 bytes of netlist ([`circuit/pool-judgment.json`](circuit/pool-judgment.json)) |
 | Checked | Equal to the rule function on **all 134,217,728 input combinations** (2^27), and the rule function equal to the server's own code on every combination its functions take |
-| Cost to tape out | **0.017 OKB** in fees (0.0013 + 157 × 0.0001), **0.01766 OKB** with the transistor mint's protocol fee |
+| On X Layer mainnet | **Circuit 1** on the DeSpell processor [`0x3A49E01c0080FF9F99B5Df164e7ac27941836603`](https://www.oklink.com/xlayer/address/0x3A49E01c0080FF9F99B5Df164e7ac27941836603), taped out 2026-11-26. The netlist read back from the chain is the committed one, and `eval` equals the rule function on all 64 samples ([On X Layer mainnet](#on-x-layer-mainnet)) |
+| Cost to tape out | **0.0129 OKB** in all for this tape-out, the swap for the factory's BEM fees included. On a processor that charges in OKB, like OrderGuard XL: **0.017 OKB** in fees (0.0013 + 157 × 0.0001), **0.01766 OKB** with the transistor mint's protocol fee |
 
 The circuit is a second, public copy of the judgment. The server stays the one that decides; the app compares the two and holds a card when they differ. TapeOut's netlist format is a draft and its contracts are not audited, so a circuit result is supporting evidence, never the only check.
 
@@ -131,7 +132,7 @@ The builder folds constants, removes double negations and makes each distinct NA
 
 ## Evidence
 
-**Circuit = rule function, every input.** `pnpm test`, 2026-11-26:
+**Circuit = rule function, every input.** `pnpm test`, 2026-11-25:
 
 ```
 ✔ the circuit equals the rule function on every input combination
@@ -141,7 +142,7 @@ The builder folds constants, removes double negations and makes each distinct NA
 ℹ tests 31 · pass 31 · fail 0
 ```
 
-**Rule function = server code.** The rule function and `measure.ts` were run against the server's own functions, from the private DeSpell codebase, on the same readings. That script names private code, so it stays outside this repository; its result on 2026-11-26:
+**Rule function = server code.** The rule function and `measure.ts` were run against the server's own functions, from the private DeSpell codebase, on the same readings. That script names private code, so it stays outside this repository; its result on 2026-11-25:
 
 | What | Cases | Differ |
 | --- | --- | --- |
@@ -172,11 +173,11 @@ circuit #27: 17 in, 1 out, 40 NAND · local evaluation = on-chain eval on 24/24 
 
 That confirms the gate encoding (0x00, two big-endian u24 signals), outputs as the last gates in pin order, input packing across several bytes and output packing for several pins.
 
-**Output buffers.** At tape-out the contract adds two buffer NANDs, NAND(x, x) twice, to every output: 10 more gates for this circuit's 5 outputs. They are not part of the netlist: `circuitInfo` reports the netlist's own 157 gates and `netlist(id)` returns the same 1,099 bytes. On a fork of X Layer mainnet (2026-11-26) the tape-out went through holding exactly 157 transistors, so the cost below counts 157. DES-699 confirms the count on the real tape-out before paying (`estimateGas` on the tape-out call).
+**Output buffers.** At tape-out the contract adds two buffer NANDs, NAND(x, x) twice, to every output: 10 more gates for this circuit's 5 outputs. They are not part of the netlist: `circuitInfo` reports the netlist's own 157 gates and `netlist(id)` returns the same 1,099 bytes. On a fork of X Layer mainnet (2026-11-25) the tape-out went through holding exactly 157 transistors, so the cost below counts 157. The mainnet tape-out (2026-11-26) did the same: the wallet minted exactly 157 transistors, the tape-out used them all, and it holds none after.
 
 ## Cost
 
-Fees read from X Layer mainnet on 2026-11-26 on the OrderGuard XL processor (`0x57F319CF056F72F48cF1dbb670F2A3DB007Aa355`, transistor contract `0x8e71FC45ff47E5a7bA1ad2960793ebAdD2739D9e`):
+Fees read from X Layer mainnet on 2026-11-25 on the OrderGuard XL processor (`0x57F319CF056F72F48cF1dbb670F2A3DB007Aa355`, transistor contract `0x8e71FC45ff47E5a7bA1ad2960793ebAdD2739D9e`):
 
 | Item | Rate | This circuit |
 | --- | --- | --- |
@@ -189,7 +190,7 @@ Fees read from X Layer mainnet on 2026-11-26 on the OrderGuard XL processor (`0x
 
 At 79.03 USD per OKB (2026-11-25), the total is about 1.40 USD.
 
-A processor made today with the TapeOut factory charges differently. On a fork of X Layer mainnet (2026-11-26), making one cost 0.1 BEM (the factory's fee token) and minting 157 NAND at the lowest price cost 0.01000157 BEM; the tape-out fee stayed 0.0013 OKB. That is the way this circuit is taped out; see [Taping out](#taping-out).
+A processor made now with the TapeOut factory charges differently. On a fork of X Layer mainnet (2026-11-25), making one cost 0.1 BEM (the factory's fee token) and minting 157 NAND at the lowest price cost 0.01000157 BEM; the tape-out fee stayed 0.0013 OKB. That is the way this circuit is taped out; see [Taping out](#taping-out).
 
 ## Taping out
 
@@ -212,7 +213,36 @@ import { judgeOnChain, XLayerReader } from "./src/onchain.ts";
 const judgment = await judgeOnChain(new XLayerReader(), processor, circuitId, input); // { stage, lane }
 ```
 
-On a fork of X Layer mainnet (2026-11-26) the whole run from OKB only went through: the swap bought 0.1240 BEM for 0.0121 OKB, the processor was made, the circuit taped out as circuit 1, and `eval` matched the rule function on all 64 samples. In all it spent about 0.0134 OKB plus gas (the five tape-out transactions were estimated at 2.52 million gas, 0.0001 OKB at 0.04 gwei; the swap is one more), about 1.1 USD.
+On a fork of X Layer mainnet (2026-11-25) the whole run from OKB only went through: the swap bought 0.1240 BEM for 0.0121 OKB, the processor was made, the circuit taped out as circuit 1, and `eval` matched the rule function on all 64 samples. In all it spent about 0.0134 OKB plus gas (the five tape-out transactions were estimated at 2.52 million gas, 0.0001 OKB at 0.04 gwei; the swap is one more), about 1.1 USD.
+
+### On X Layer mainnet
+
+The circuit was taped out on X Layer mainnet (chain 196) on 2026-11-26, from one wallet holding only OKB, in six transactions:
+
+| Step | Transaction | Block |
+| --- | --- | --- |
+| Swap 0.011593 OKB for BEM through a LI.FI quote (the wallet then held 0.12395852 BEM) | [`0x4180da81…0b6d`](https://www.oklink.com/xlayer/tx/0x4180da817ab0dfeb2aac4099774786f7bbe2e26d8b2cdfbde2510a660ab80b6d) | 76910955 |
+| Approve 0.1 BEM to the TapeOut factory | [`0x39135de2…e8da`](https://www.oklink.com/xlayer/tx/0x39135de22760e9b89cc7812af6c1727716a114ffebc7eef0b589c78d0d0fe8da) | 76911010 |
+| `createCPU`: the processor "DeSpell Pool Judgment" | [`0x216748ca…3972`](https://www.oklink.com/xlayer/tx/0x216748ca085b02eb57e9741c993a961f73beb1c2643bd2a2f5a72ef8a1c63972) | 76911012 |
+| Approve 0.01000157 BEM to its transistor contract | [`0x65cdc96c…394b`](https://www.oklink.com/xlayer/tx/0x65cdc96cece68936f01df78f1edbfd7ed14e07297e6c13c7a7c5b0960369394b) | 76911037 |
+| `mint` 157 NAND transistors | [`0xde1a4907…0091`](https://www.oklink.com/xlayer/tx/0xde1a490724693db53bd3827ab838cc85ed47f254742d12152b4546584ca70091) | 76911040 |
+| `tapeout` of the netlist, 0.0013 OKB: circuit 1 | [`0xb0f16987…7637`](https://www.oklink.com/xlayer/tx/0xb0f16987d439545c77cd4ad8fe6ec22ebebcfefc8ca75edcf46e8993ba127637) | 76911042 |
+
+| What | Address |
+| --- | --- |
+| DeSpell processor | [`0x3A49E01c0080FF9F99B5Df164e7ac27941836603`](https://www.oklink.com/xlayer/address/0x3A49E01c0080FF9F99B5Df164e7ac27941836603) |
+| Its transistor contract | [`0x174D6c9fB60ED837Ff0666582f9036F6a1Af17eD`](https://www.oklink.com/xlayer/address/0x174D6c9fB60ED837Ff0666582f9036F6a1Af17eD) |
+| Circuit id | `1` |
+
+All six succeeded. They spent 0.012936 OKB in all: 0.011593 for the swap, 0.0013 for the tape-out fee and 0.000043 for gas (2,155,630 gas at 0.02 gwei). That is about 1.05 USD at the swap quote's price. Both BEM approvals were used up, and 0.01395695 BEM is left over from the swap. Reading it back with `node scripts/check-tapeout.ts --processor 0x3A49E01c0080FF9F99B5Df164e7ac27941836603`:
+
+```text
+processor 0x3a49e01c0080ff9f99b5df164e7ac27941836603, circuit #1: 27 in, 5 out, 157 NAND, state 0
+netlist on chain = circuit/pool-judgment.json: yes
+eval on X Layer = rule function on 64/64 samples
+```
+
+Between the second and third lines it prints one line per sample, with the chain's answer next to the rule function's (for example `= 4 trusted pool, fee changed … chain restricted/standard  rule restricted/standard`).
 
 ## What the circuit leaves out
 
