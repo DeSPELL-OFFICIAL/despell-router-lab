@@ -1,6 +1,6 @@
 // What taping the circuit out on X Layer costs, in OKB.
 //
-// The three fees were read from X Layer mainnet (chain 196) on 2026-11-26 with view calls on the OrderGuard XL
+// The three fees were read from X Layer mainnet (chain 196) on 2026-11-25 with view calls on the OrderGuard XL
 // processor and its transistor contract (scripts/check-onchain.ts prints them again). They are the same as the
 // figures the reference implementation measured. A processor of our own may charge differently; DES-699 reads its
 // fees again before paying. Gas is separate and small (README).

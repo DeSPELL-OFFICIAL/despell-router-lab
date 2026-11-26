@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /// The TapeOut contracts on X Layer mainnet (chain 196), as far as the tape-out uses them. Read from the deployed
-/// bytecode and checked on a fork on 2026-11-26; the TapeOut factory is upgradeable, so fees and shapes can change.
+/// bytecode and checked on a fork on 2026-11-25; the TapeOut factory is upgradeable, so fees and shapes can change.
 
 /// The factory that makes processors. Since its last upgrade it takes its deploy fee in BEM (transferFrom).
 interface ITapeOutFactory {
