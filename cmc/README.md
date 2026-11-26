@@ -1,6 +1,8 @@
 # cmc — one stock, many wrappers, ranked by what $100 actually buys
 
-Part of the CoinMarketCap API hackathon entry (RWA track). Give it a stock ticker such as `NVDA` and it:
+Part of the CoinMarketCap API hackathon entry (RWA track). **Live demo: [lab.despell.io/cmc](https://lab.despell.io/cmc)** (NVIDIA, measured on load and reused for a few minutes).
+
+Give it a stock ticker such as `NVDA` and it:
 
 1. reads the stock's tokenized wrappers from CoinMarketCap's RWA API (`/v5/real-world-assets/quotes/latest`): each token, its issuer and its CMC price;
 2. expands each token to the chains it lives on (`/v2/cryptocurrency/info`, `contract_address[]`), so a wrapper is one token on one chain;
