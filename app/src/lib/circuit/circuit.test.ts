@@ -7,7 +7,7 @@ import { judge } from "@despell-lab/xlayer/src/rule.ts";
 import { SELECTOR } from "@despell-lab/xlayer/src/onchain.ts";
 import { GIWA_SEPOLIA, BASE_SEPOLIA } from "@/lib/swap/chains";
 import { canSign } from "@/components/sign-card/sign-card";
-import { CIRCUIT, evaluateLocally, parseDeployment, type CircuitDeployment } from "./circuit";
+import { CIRCUIT, deploymentFrom, evaluateLocally, parseDeployment, TAPED_OUT, type CircuitDeployment } from "./circuit";
 import { checkFrom, checkFromQuery, circuitGate, circuitLine, MISMATCH_TITLE, REFUSED_TITLE, sameJudgment, serverMark, type CircuitCheck, type QueryState } from "./check";
 import { serverJudgmentFor } from "./server-judgment";
 import { EVAL_ABI, judgeOnXLayer } from "./xlayer-eval";
@@ -214,6 +214,20 @@ describe("parseDeployment", () => {
     expect(parseDeployment("0x1111111111111111111111111111111111111111", "0")).toBeNull();
     expect(parseDeployment("0x1234", "7")).toBeNull();
     expect(parseDeployment("0x1111111111111111111111111111111111111111", " 7 ")).toEqual(DEPLOYMENT);
+  });
+});
+
+describe("deploymentFrom", () => {
+  it("is the X Layer mainnet tape-out unless both settings override it", () => {
+    expect(TAPED_OUT).toEqual({ processor: "0x3A49E01c0080FF9F99B5Df164e7ac27941836603", circuitId: 1n });
+    expect(deploymentFrom(undefined, undefined)).toEqual(TAPED_OUT);
+    expect(deploymentFrom("0x1111111111111111111111111111111111111111", "7")).toEqual(DEPLOYMENT);
+  });
+
+  it("keeps the tape-out when a setting is missing or mistyped, so the check is never turned off", () => {
+    expect(deploymentFrom("0x1111111111111111111111111111111111111111", undefined)).toEqual(TAPED_OUT);
+    expect(deploymentFrom("", "")).toEqual(TAPED_OUT);
+    expect(deploymentFrom("0x1234", "7")).toEqual(TAPED_OUT);
   });
 });
 

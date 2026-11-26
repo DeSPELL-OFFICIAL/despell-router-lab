@@ -23,10 +23,10 @@ export function useCircuitCheck(
   const server = serverJudgmentFor(chainId, pool, opts);
   const deployment = DEPLOYMENT;
   const q = useQuery({
-    queryKey: ["circuit-eval", deployment?.processor, deployment?.circuitId.toString(), chainId, pool.toLowerCase()],
+    queryKey: ["circuit-eval", deployment.processor, deployment.circuitId.toString(), chainId, pool.toLowerCase()],
     // A refusal comes back as data, so only transport failures are errors (and retried).
-    queryFn: () => readCircuit(xLayerClient(), deployment!, server!.input),
-    enabled: Boolean(server && deployment),
+    queryFn: () => readCircuit(xLayerClient(), deployment, server!.input),
+    enabled: Boolean(server),
     retry: 2,
     staleTime: Infinity,
     refetchOnReconnect: false,
