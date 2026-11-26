@@ -14,6 +14,9 @@
 // WAIT_MINUTES, default 30), OUT (default ../deployments/loop-demo-base-sepolia.json). CHECK_ONLY=1 runs the read-only
 // checks and stops before sending; it needs no key.
 //
+// Every run that passes the checks replaces OUT. The default path holds the committed record of the demo video's run,
+// so give a new run its own OUT, or copy the old record first, to keep both.
+//
 // Three Base Sepolia transactions from the owner. The reactions (Lasna) and the marks (Base Sepolia) come from
 // Reactive Network. The record is written after every step and names no path on this machine.
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -158,23 +161,26 @@ async function main() {
   // pass, so a second run started by mistake stops before it touches a running demo's signals.
   mkdirSync(SIGNAL_DIR, { recursive: true });
   for (const step of STEPS) rmSync(join(SIGNAL_DIR, `${step}.go`), { force: true });
+  log(`record: ${OUT} (replaces any earlier record there)`);
   save();
 
   // 1. A's fee to 10%: PoolReflex marks A narrowed, and the card routes through B.
   if (!(await waitForGo("raise"))) stop("no go for raise; nothing sent");
   const raised = await send("raise", POOL_DIR, "script/SetFee.s.sol", { HOOK, NEW_FEE: String(HIGH_FEE) });
-  if ((await loop(raised.step, raised.lasnaFrom)).result !== "marked") stop("pool A was not marked after its fee change");
+  if ((await loop(raised.step, raised.lasnaFrom)).result !== "marked") {
+    stop("pool A was not marked after its fee change; pool A is left at 10%, and a late answer may still mark it");
+  }
 
   // 2. A's fee back to 0.05%: another change, so PoolGuard keeps A narrowed. Wait for that answer before reopening, or
   //    a late callback would mark A again after the reopen.
   if (!(await waitForGo("lower"))) stop("no go for lower; pool A is left at 10% and marked");
   const lowered = await send("lower", POOL_DIR, "script/SetFee.s.sol", { HOOK, NEW_FEE: String(LOW_FEE) });
   if ((await loop(lowered.step, lowered.lasnaFrom)).result.startsWith("no answer")) {
-    stop("no answer to pool A's fee change back; not reopening A, or the late answer would mark it again after");
+    stop("no answer to pool A's fee change back; pool A is left at 0.05% and marked. Not reopening A, or the late answer would mark it again after");
   }
 
   // 3. The owner reopens A: both pools are open, and the card routes through A, which pays more.
-  if (!(await waitForGo("reopen"))) stop("no go for reopen; pool A is left marked");
+  if (!(await waitForGo("reopen"))) stop("no go for reopen; pool A is left at 0.05% and marked");
   await send("reopen", REFLEX_DIR, "script/Reopen.s.sol", { GUARD, POOL_ID });
 }
 
