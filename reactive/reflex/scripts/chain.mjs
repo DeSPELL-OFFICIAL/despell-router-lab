@@ -1,6 +1,7 @@
-// Shared by measure.mjs and route-demo.mjs: plain JSON-RPC reads on Base Sepolia and Lasna, forge runs that send one
-// script's transactions, and the wait for PoolGuard's answer to a pool change. Nothing here holds a key: forge reads
-// PRIVATE_KEY from the environment that scripts/with-key.mjs gives the parent process.
+// Shared by measure.mjs, route-demo.mjs and loop-demo.mjs: plain JSON-RPC reads on Base Sepolia and Lasna, forge runs
+// that send one script's transactions, and the lookups for PoolReflex's reaction and PoolGuard's answer to a pool
+// change. Nothing here holds a key: forge reads PRIVATE_KEY from the environment that scripts/with-key.mjs gives the
+// parent process.
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -74,6 +75,17 @@ export async function logsRange(url, address, topics, from, to) {
     found.push(...(await rpc(url, "eth_getLogs", [{ address, fromBlock: hex(a), toBlock: hex(b), topics }])));
   }
   return found;
+}
+
+/**
+ * PoolReflex's reactive transaction on Lasna for one pool change: its Reflex event carries the pool and the origin
+ * transaction. Returns { tx, block, time } or null when Lasna has not shown it yet.
+ */
+export async function findReaction({ reflex, pool, originTx, fromBlock }) {
+  const found = await logsRange(LASNA_RPC, reflex, [REFLEX_EVENT, `0x${pad32(pool)}`, originTx], fromBlock, await latest(LASNA_RPC));
+  if (!found.length) return null;
+  const b = await blockOf(LASNA_RPC, Number(found[0].blockNumber));
+  return { tx: found[0].transactionHash, block: b.number, time: b.time };
 }
 
 /** One line for the record: the first error line of a tool's output, with file paths taken out. */

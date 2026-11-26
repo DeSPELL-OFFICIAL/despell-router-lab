@@ -19,15 +19,14 @@ import { fileURLToPath } from "node:url";
 import {
   blockOf,
   feeOf,
+  findReaction,
   forgeSend,
   HOOK,
   LASNA_RPC,
   latest,
-  logsRange,
   oneLine,
   POOL_ID,
   precheck as checkBeforeSending,
-  REFLEX_EVENT,
   BASE_RPC,
   sleep,
   statusInLog,
@@ -66,12 +65,7 @@ const feeNow = () => feeOf(POOL_ID);
 const statusNow = () => statusOf(GUARD, POOL_ID);
 const waitForMark = (feeTx, fromBlock, timeoutMs) => waitForPoolMark({ guard: GUARD, pool: POOL_ID, originTx: feeTx, fromBlock, timeoutMs });
 
-async function findReactive(feeTx, fromBlock) {
-  const found = await logsRange(LASNA_RPC, REFLEX, [REFLEX_EVENT, POOL_ID, feeTx], fromBlock, await latest(LASNA_RPC));
-  if (!found.length) return null;
-  const b = await blockOf(LASNA_RPC, Number(found[0].blockNumber));
-  return { tx: found[0].transactionHash, block: b.number, time: b.time };
-}
+const findReactive = (feeTx, fromBlock) => findReaction({ reflex: REFLEX, pool: POOL_ID, originTx: feeTx, fromBlock });
 
 function median(xs) {
   const s = [...xs].sort((a, b) => a - b);
