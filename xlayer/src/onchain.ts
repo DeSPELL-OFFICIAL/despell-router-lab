@@ -33,6 +33,9 @@ export const TAPEOUT_FACTORY = "0x1f09DAeFA827f02CBb40967cc91b259763760761";
 /** The name the tape-out script gives the DeSpell processor. */
 export const DESPELL_PROCESSOR_NAME = "DeSpell Pool Judgment";
 
+/** Where the pool judgment circuit is taped out on X Layer mainnet (2026-11-26, README "On X Layer mainnet"). */
+export const TAPED_OUT = { processor: "0x3A49E01c0080FF9F99B5Df164e7ac27941836603", circuitId: 1 } as const;
+
 export type CircuitInfo = { readonly nIn: number; readonly nOut: number; readonly nState: number; readonly gateCount: number };
 
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{

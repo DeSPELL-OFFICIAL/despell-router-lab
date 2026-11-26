@@ -25,11 +25,15 @@ The circuit is a second, public copy of the judgment. The server stays the one t
 | `src/cost.ts` | OKB fees |
 | `src/onchain.ts` | Reads a TapeOut processor over JSON-RPC (`eval`, `netlist`, `circuitInfo`, fees) and gives the circuit's judgment for an input (`judgeOnChain`) |
 | `src/samples.ts` | Named and pseudo-random sample vectors with the rule's answers, for checking `eval` after a tape-out |
+| `src/journal.ts` | Reads the router journal in an export shape, groups it into patrol steps and turns each step into input bits and the stage the server wrote |
+| `src/replay.ts` | Replays those steps through a circuit (the netlist here, or `eval` on X Layer) and counts how many give the server's stage |
 | `scripts/build-circuit.ts` | Builds the netlist, checks it on every input, writes `circuit/pool-judgment.json` and `circuit/pool-judgment-samples.json` |
 | `scripts/check-onchain.ts` | Read-only X Layer checks: fees today, and the byte format against circuits already on chain |
 | `scripts/quote-bem.ts` | Fetches and checks a LI.FI quote for the OKB → BEM swap the tape-out needs (a read; nothing is sent) |
 | `scripts/find-processor.ts` | Finds the DeSpell processor a wallet made and records its address outside the repository, so later runs name it |
 | `scripts/check-tapeout.ts` | After the tape-out: reads the circuit back from X Layer and compares `eval` with the rule function on every sample |
+| `scripts/replay-journal.ts` | Replays a journal export through the circuit and prints "M of N", every difference and every step it could not replay |
+| `test/fixtures/journal-sample.json` | Made-up journal lines in the export shape, for the tests and for trying the replay. Not router journal data |
 | `contracts/` | Foundry: the TapeOut interfaces, the tape-out script, a unit test, and fork tests against X Layer mainnet |
 
 This folder is one package of the repository's pnpm workspace, so `pnpm install` runs at the repository root and the root lockfile pins its two dev dependencies (TypeScript and Node types). Nothing else is needed: the code runs on Node 24 with its built-in TypeScript support.
@@ -41,6 +45,8 @@ pnpm typecheck
 pnpm build:circuit        # rebuild circuit/pool-judgment.json and its samples
 pnpm check:circuit        # fail if the committed netlist or samples are out of date
 node scripts/check-onchain.ts
+node scripts/replay-journal.ts --file test/fixtures/journal-sample.json           # replay the made-up sample here
+node scripts/replay-journal.ts --file test/fixtures/journal-sample.json --chain   # … through eval on X Layer
 
 cd contracts
 ./scripts/install-deps.sh               # forge-std at a pinned commit
@@ -243,6 +249,27 @@ eval on X Layer = rule function on 64/64 samples
 ```
 
 Between the second and third lines it prints one line per sample, with the chain's answer next to the rule function's (for example `= 4 trusted pool, fee changed … chain restricted/standard  rule restricted/standard`).
+
+## Replaying the router journal
+
+The router writes every patrol step to its journal: the stage before, the reflexes that fired, the AI team's lines, and, when a judgment was applied, one trust transition line with the proposal and the probe numbers. `scripts/replay-journal.ts` takes those steps, builds the circuit's input bits for each one (`src/journal.ts`), asks the circuit, and compares the circuit's stage with the stage the server wrote.
+
+```bash
+node scripts/replay-journal.ts --file <export.json>           # the committed netlist, evaluated here
+node scripts/replay-journal.ts --file <export.json> --chain   # eval on X Layer, circuit 1 on the DeSpell processor
+```
+
+The journal lives in the router's private database. Nothing in this repository connects to it: whoever can read it exports the lines to a JSON file in the shape `src/journal.ts` checks (`JournalExport`: chain, lines, and each pool's family from its card), and the script reads that file.
+
+What a replay checks, and what it does not:
+
+- **The stage only.** A lane is decided per trade and is not journaled, so the lane is not compared. The lane-only pins (operator block, card age, amount) are fixed.
+- **The decision is read back from the proposal.** The journal records the judge's proposal (the stage it proposed), not the AI's raw decision. The decision bits are read back the way the server reads its own journal: the decision from the proposed stage, a full review from the line's reason, and the admin handle path as the only restrict that proposes `restricted` from `unknown`. So a replay checks the reflex and the trust transition (`applyReflex`, `nextTrustState`) on real steps; the step from the AI's raw decision to its proposal is checked only as far as those bits give back the recorded proposal.
+- **Not replayable is counted apart.** A step whose bits do not give back the recorded proposal, or that misses a line the encoding needs, is listed by reason and left out of "M of N". Nothing is guessed.
+- **Steps the AI did not judge are replayed with no decision**: no change, a watch-only family, a deferred or cut review. A pool under an operator block is not read by the patrol, so it has no step.
+- **Pin 18** is clear only when the judge's token reading and the step's own reading are both clear (the server proposes with the first and applies with the second).
+
+`test/fixtures/journal-sample.json` is made up: 35 lines covering those cases, including one step of each kind that cannot be replayed. On it the committed netlist and `eval` on X Layer both give the server's stage on 11 of 11 replayable steps; the tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference.
 
 ## What the circuit leaves out
 

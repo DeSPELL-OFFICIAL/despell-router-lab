@@ -79,7 +79,7 @@ export function formatReplay(report: ReplayReport): string {
   const out: string[] = [];
   out.push(`${report.same} of ${report.replayed} replayed patrol steps: the circuit's stage equals the server's`);
   out.push(
-    `${report.lines} journal lines · ${report.steps} patrol steps · ${report.replayed} replayed · ${report.steps - report.replayed} not replayable · ${report.otherLines} operator lines (not steps) · ${report.vectors} distinct inputs`,
+    `journal lines ${report.lines} · patrol steps ${report.steps} · replayed ${report.replayed} · not replayable ${report.steps - report.replayed} · operator lines, not steps ${report.otherLines} · distinct inputs ${report.vectors}`,
   );
   for (const [reason, count] of Object.entries(report.notReplayable)) {
     if (count > 0) out.push(`  not replayable, ${NOT_REPLAYABLE[reason as NotReplayableReason]}: ${count}`);
