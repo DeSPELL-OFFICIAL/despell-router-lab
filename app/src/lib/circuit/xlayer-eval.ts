@@ -7,6 +7,7 @@ import {
   fallback,
   hexToBytes,
   http,
+  isHex,
   parseAbi,
   type PublicClient,
 } from "viem";
@@ -67,15 +68,20 @@ export function nodeErrorCode(error: unknown): number | null {
 /**
  * The chain said no: an empty answer (an address with no code), revert data, or the node's JSON-RPC code 3
  * (execution reverted). viem also reports an internal error (-32603) that carries a message as a revert; that one,
- * like a rate limit, is a transport failure here, not an answer.
+ * like a rate limit, is a transport failure here, not an answer. Revert data is hex: viem passes the node's `data`
+ * through as given, so a node that puts text there (e.g. "execution reverted") has sent no revert data.
  */
 export function chainSaidNo(error: unknown): boolean {
   if (!(error instanceof BaseError)) return false;
   if (error.walk((e) => e instanceof ContractFunctionZeroDataError)) return true;
   const reverted = error.walk((e) => e instanceof ContractFunctionRevertedError);
   if (!(reverted instanceof ContractFunctionRevertedError)) return false;
-  if (reverted.raw && reverted.raw !== "0x") return true;
+  if (isRevertData(reverted.raw)) return true;
   return nodeErrorCode(error) === 3;
+}
+
+function isRevertData(raw: unknown): boolean {
+  return typeof raw === "string" && raw !== "0x" && isHex(raw, { strict: true });
 }
 
 async function read<T>(what: string, call: () => Promise<T>): Promise<T> {
