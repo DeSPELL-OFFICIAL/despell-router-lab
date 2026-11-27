@@ -119,23 +119,32 @@ describe("the left-out row", () => {
 
 describe("the marks table's Mark now cell", () => {
   it("shows the server's read only until the first 2-second read answers", () => {
-    expect(markNow(A.id, null, null, 0)).toEqual({ kind: "status", status: 0, from: "server" });
-    expect(markNow(A.id, null, null, null)).toEqual({ kind: "none", reason: null });
+    expect(markNow(A.id, null, null, 0, NOW)).toEqual({ kind: "status", status: 0, from: "server" });
+    expect(markNow(A.id, null, null, null, NOW)).toEqual({ kind: "none", reason: null });
   });
 
   it("follows the card's read, pool by pool, whatever the server said", () => {
     const read = readOf(2, 0);
-    expect(markNow(A.id, read, null, 0)).toEqual({ kind: "status", status: 2, from: "chain" });
-    expect(markNow(B.id.toUpperCase().replace("0X", "0x"), read, null, 3)).toEqual({ kind: "status", status: 0, from: "chain" });
+    expect(markNow(A.id, read, null, 0, NOW)).toEqual({ kind: "status", status: 2, from: "chain" });
+    expect(markNow(B.id.toUpperCase().replace("0X", "0x"), read, null, 3, NOW)).toEqual({ kind: "status", status: 0, from: "chain" });
+  });
+
+  it("clears a stale status until a fresh read arrives", () => {
+    const read = readOf(2, 0);
+    const lastFreshTime = NOW + MARKS_MAX_AGE_MS;
+    expect(markNow(A.id, read, null, 0, lastFreshTime)).toEqual({ kind: "status", status: 2, from: "chain" });
+    expect(markNow(A.id, read, null, 0, lastFreshTime + 1)).toEqual({ kind: "none", reason: "last read 6 s ago" });
+    const freshRead = { ...readOf(0, 0), receivedAt: lastFreshTime + 1 };
+    expect(markNow(A.id, freshRead, null, 2, freshRead.receivedAt)).toEqual({ kind: "status", status: 0, from: "chain" });
   });
 
   it("shows a dash and the reason when the latest read failed, not the earlier answer", () => {
     const failed = Object.assign(new Error("long message\nwith detail"), { shortMessage: "HTTP request failed. Status: 429" });
-    expect(markNow(A.id, readOf(2, 0), failed, 2)).toEqual({ kind: "none", reason: "read failed: HTTP request failed. Status: 429" });
-    expect(markNow(A.id, null, "x".repeat(200), 0)).toEqual({ kind: "none", reason: `read failed: ${"x".repeat(79)}…` });
+    expect(markNow(A.id, readOf(2, 0), failed, 2, NOW + 10_000)).toEqual({ kind: "none", reason: "read failed: HTTP request failed. Status: 429" });
+    expect(markNow(A.id, null, "x".repeat(200), 0, NOW)).toEqual({ kind: "none", reason: `read failed: ${"x".repeat(79)}…` });
   });
 
   it("says so for a pool the card does not read", () => {
-    expect(markNow(`0x${"cd".repeat(32)}`, readOf(0, 0), null, 0)).toEqual({ kind: "none", reason: "not one of the card's pools" });
+    expect(markNow(`0x${"cd".repeat(32)}`, readOf(0, 0), null, 0, NOW)).toEqual({ kind: "none", reason: "not one of the card's pools" });
   });
 });

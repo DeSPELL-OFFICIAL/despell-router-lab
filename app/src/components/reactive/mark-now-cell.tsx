@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { markNow } from "@/lib/pool-marks";
 import { useMarks } from "./use-marks";
 
@@ -17,10 +18,16 @@ type Props = {
 /** "Mark now" in the page's marks table: the same 2-second PoolGuard read as the card above it. */
 export function MarkNowCell({ poolId, initial, labels, badgeClass, tones }: Props) {
   const q = useMarks();
-  // Failing until a read answers again. Not q.isError: with no answer yet, react-query clears the error as soon as the
-  // next try starts, and the server's first-paint value would flash back between failures.
+  // Keep aging the last read while polling is stalled, as the card does.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+  // Keep showing the failure until a read answers again. React Query clears the error when it retries without data.
   const failing = q.errorUpdatedAt > q.dataUpdatedAt;
-  const view = markNow(poolId, q.data ?? null, failing ? (q.error ?? q.failureReason ?? "no answer yet, reading again") : null, initial);
+  const error = failing ? (q.error ?? q.failureReason ?? "no answer yet, reading again") : null;
+  const view = markNow(poolId, q.data ?? null, error, initial, now);
   if (view.kind === "none") {
     return (
       <span className="ds-dim" data-mark-now="none">

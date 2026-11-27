@@ -87,6 +87,7 @@ function parseSteps(text) {
     if (!m) fail(`unknown step ${name} (steps: raise, lower, reopen, raise-b, lower-b, reopen-b)`);
     return { name, kind: m[1], pool: m[2] ? "B" : "A" };
   });
+  if (steps.length === 0) fail("STEPS must list at least one pool's steps");
   if (new Set(steps.map((s) => s.name)).size !== steps.length) fail("a step is listed twice");
   for (const pool of new Set(steps.map((s) => s.pool))) {
     const order = steps.filter((s) => s.pool === pool).map((s) => s.kind).join(",");
@@ -208,7 +209,7 @@ async function main() {
   for (const key of Object.keys(POOLS)) {
     const pool = POOLS[key];
     const [f, st] = [await feeOf(pool.id), await statusOf(GUARD, pool.id)];
-    if (used.has(key) && f !== LOW_FEE) fail(`${pool.name}'s fee is ${f}, not ${LOW_FEE}; set it back first`);
+    if (f !== LOW_FEE) fail(`${pool.name}'s fee is ${f}, not ${LOW_FEE}; set it back first`);
     if (st !== 0) fail(`${pool.name} is marked; reopen it first${used.has(key) ? "" : ", or the card has no route while the other pool is out"}`);
   }
   const reactions = BigInt(STEPS.filter((s) => s.kind !== "reopen").length);

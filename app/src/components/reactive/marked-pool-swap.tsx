@@ -18,7 +18,7 @@ import { useMarks } from "./use-marks";
   transaction, stopping if the pool the plan swaps through is marked. A mark
   that lands while the wallet's window is open is not seen until the next
   transaction; the plan's deadline bounds how long that window can be.
-  The page's marks table reads the same query (useMarks), so the two agree.
+  The page's marks table uses the same PoolGuard read (useMarks).
 */
 
 export function MarkedPoolSwap() {

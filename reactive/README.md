@@ -147,8 +147,8 @@ with `STEPS=raise,raise-b,lower,reopen,lower-b,reopen-b`; its record is
 | Pool B fee 10% → 0.05% | [`0x4348bd3e…f755`](https://sepolia.basescan.org/tx/0x4348bd3e8eac8ab98afba9b4a9737231eda3f122eb594667c71863e11cf6f755) · 64230489 | [`0x59775771…914e`](https://lasna.reactscan.net/tx/0x5977577138d175d01a5a744f1a2e3483c5f871ec17c0b03ef79a2beb86bf914e) | kept narrowed (`MarkKept`), [`0xf085032b…d54e`](https://sepolia.basescan.org/tx/0xf085032baa2564c91ac0b81da9cdd568361b94ef2c9e32f4f63bf64c2099d54e) · 64230495 | 1 s · 6 blocks |
 | Reopen pool B | [`0x90564b37…3727`](https://sepolia.basescan.org/tx/0x90564b3769598e9e1c6075f927621a8e1f010bb142e2363455c027f673953727) · 64230558 | — | — | — |
 
-Between the first two steps, with pool A marked, the card quoted through pool B and a test wallet signed it: 10 USDC
-in, 0.00595765 ETH out, in three transactions (USDC approval for Permit2
+Between the first two steps, with pool A marked, the card quoted through pool B and the pool owner's test wallet
+signed the swap: 10 USDC in, 0.00595765 ETH out, in three transactions (USDC approval for Permit2
 [`0x6b2d3f61…2822`](https://sepolia.basescan.org/tx/0x6b2d3f612a0322dfa1e52c594c65ad2f9bea6dbb78e7e46d79e0ba9b9e212822),
 Permit2 approval for the Universal Router
 [`0x33892647…7c5f`](https://sepolia.basescan.org/tx/0x338926472731100845aa9cf5bcd114a53dca93e30aebeb71f10c8d1627877c5f),
