@@ -1,0 +1,136 @@
+{
+  "startedAt": "2026-11-27T08:23:33.637Z",
+  "origin": {
+    "chain": "Base Sepolia",
+    "chainId": 84532,
+    "hook": "0x18813Bc0B1954490e751e6800Ae5E9d8C5D09000",
+    "pool": "0xfbce48fa376e45019cf2c5d4afbe45e0fbf19dd3ad442162431aad7519adbbb4",
+    "poolB": "0xa7692fed527766fb44a78fb84faffa4cc759bb29002969b87e571366db28efc2"
+  },
+  "reactive": {
+    "chain": "Reactive Lasna",
+    "chainId": 5318007,
+    "poolReflex": "0x321dB6a8b9eB320c761a8f801FE4757e60f2484A"
+  },
+  "destination": {
+    "chain": "Base Sepolia",
+    "chainId": 84532,
+    "poolGuard": "0xcF269776640D3D19C9c515f3eEAF1DaD53d88378"
+  },
+  "method": "seconds = PoolGuard answer block timestamp - change block timestamp (whole seconds); blocks = Base Sepolia block gap (about 0.2 s each)",
+  "plan": [
+    "raise",
+    "raise-b",
+    "lower",
+    "reopen",
+    "lower-b",
+    "reopen-b"
+  ],
+  "steps": [
+    {
+      "step": "raise",
+      "pool": "A",
+      "tx": "0xfcc5fa722eadb2931cf4b7287ed66f6b10bf139992346b10e7b59d0a134bdccc",
+      "block": 64229895,
+      "time": 1795767847,
+      "answer": {
+        "result": "marked",
+        "tx": "0xef1b49a4e93a4c3d47cb418bc5303ddc45196509b6f0dc1018680f5ac5bf70c7",
+        "block": 64229903,
+        "time": 1795767849,
+        "status": 2,
+        "blocks": 8,
+        "seconds": 2
+      },
+      "reaction": {
+        "tx": "0xef8988107b347a9c5b935d35f87a934c7b4cb966ed6f2ff0c8447b211c85a06f",
+        "block": 9362778,
+        "time": 1795767847
+      }
+    },
+    {
+      "step": "raise-b",
+      "pool": "B",
+      "tx": "0xa7d5e4b7540162b5738c2c13aee31d015eb3f52f2476b7f322071fcbb04c3eeb",
+      "block": 64230260,
+      "time": 1795767920,
+      "answer": {
+        "result": "marked",
+        "tx": "0xef909cdb0863d1f8474ffbe497f2edee74a881b0c0abde3010b4ee4aec6ff2ee",
+        "block": 64230264,
+        "time": 1795767921,
+        "status": 2,
+        "blocks": 4,
+        "seconds": 1
+      },
+      "reaction": {
+        "tx": "0x61775eecf740633e5f335eebdb523e6d273a6b5bbcf2f52ab0d4636a4976b6eb",
+        "block": 9362845,
+        "time": 1795767919
+      }
+    },
+    {
+      "step": "lower",
+      "pool": "A",
+      "tx": "0x6238d2a68c08bb9953b99b05772e9c4dcc2555e615fe64e638fcc94b023cc11d",
+      "block": 64230334,
+      "time": 1795767935,
+      "answer": {
+        "result": "kept",
+        "tx": "0xed2ed36a1218291d73c11ad7e97b1019138bb4f39910bb36dc213fc1c3b31299",
+        "block": 64230339,
+        "time": 1795767936,
+        "status": 2,
+        "blocks": 5,
+        "seconds": 1
+      },
+      "reaction": {
+        "tx": "0xbe417d2ab2d962859e6aaff8a0de32088e8120eb5f6740dc0c9f05a1e8c63af1",
+        "block": 9362859,
+        "time": 1795767934
+      }
+    },
+    {
+      "step": "reopen",
+      "pool": "A",
+      "tx": "0xed7b7d630a43a5f2a3ab3a8d33f18cd2ba2347c7437fbf325e0b577cabbb3f11",
+      "block": 64230412,
+      "time": 1795767951
+    },
+    {
+      "step": "lower-b",
+      "pool": "B",
+      "tx": "0x4348bd3e8eac8ab98afba9b4a9737231eda3f122eb594667c71863e11cf6f755",
+      "block": 64230489,
+      "time": 1795767966,
+      "answer": {
+        "result": "kept",
+        "tx": "0xf085032baa2564c91ac0b81da9cdd568361b94ef2c9e32f4f63bf64c2099d54e",
+        "block": 64230495,
+        "time": 1795767967,
+        "status": 2,
+        "blocks": 6,
+        "seconds": 1
+      },
+      "reaction": {
+        "tx": "0x5977577138d175d01a5a744f1a2e3483c5f871ec17c0b03ef79a2beb86bf914e",
+        "block": 9362888,
+        "time": 1795767966
+      }
+    },
+    {
+      "step": "reopen-b",
+      "pool": "B",
+      "tx": "0x90564b3769598e9e1c6075f927621a8e1f010bb142e2363455c027f673953727",
+      "block": 64230558,
+      "time": 1795767980
+    }
+  ],
+  "end": {
+    "feeA": 500,
+    "statusA": 0,
+    "feeB": 500,
+    "statusB": 0,
+    "at": "2026-11-27T08:26:21.601Z"
+  }
+}

@@ -12,7 +12,7 @@ Base Sepolia, about a second later. The lab's swap card reads the mark and quote
 | Latency | 14 of 14 fee changes marked. Median 1 s by block timestamps, 6.5 Base Sepolia blocks (≈ 1.3 s at 200 ms a block); slowest 2 s, 10 blocks |
 | How it was measured | `reflex/scripts/measure.mjs` changes the fee, waits for PoolGuard's `Marked` event, and takes the mark's block against the change's block: the timestamp gap in whole seconds and the block gap. Every run's three transactions are kept in [`deployments/reflex-latency-base-sepolia.json`](deployments/reflex-latency-base-sepolia.json). [Run it yourself](#measure-it-yourself) |
 | What Reactive does | It is the only way a mark is written: PoolGuard accepts `mark` only from Reactive's callback proxy on behalf of PoolReflex, and the router's reflex table (which change narrows, which blocks) lives in PoolReflex |
-| Demo | The `/reactive` page of the lab app (`app/`): the swap card leaves a marked pool out with a "Left out" row and stops with no route when every pool is marked. [The route demo](#the-route-demo-2026-11-26) shows it on chain, and [the demo video's loop](#the-demo-video-loop-2026-11-26) lists the transactions recorded in the video |
+| Demo | The `/reactive` page of the lab app (`app/`): the swap card leaves a marked pool out with a "Left out" row and stops with no route when every pool is marked. [The route demo](#the-route-demo-2026-11-26) shows it on chain, [the demo video's loop](#the-demo-video-loop-2026-11-26) lists the transactions recorded in the first video, and [the live demo video](#the-live-demo-video-2026-11-27) those of the second, with a real swap |
 
 Why it matters: the DeSpell router tightens a pool the moment the pool changes a setting, before any AI review. Today a
 server patrol does that and can take up to 60 seconds, long enough for a pool to raise its fee between a quote and a
@@ -131,6 +131,30 @@ A run of the same script minutes earlier (its recording stopped on a bug in the 
 → reaction [`0x81a95ed4…6d4e`](https://lasna.reactscan.net/tx/0x81a95ed4c3408364c342c3d65e13fd8e8cdeec18ef65647655ba4c033d496d4e)
 → `MarkKept` [`0x86291a2d…762c`](https://sepolia.basescan.org/tx/0x86291a2d574f6a415e395d627d1f7412af9c7307583d2ec176a8b74d5fd5762c),
 4 blocks within the same second; reopen [`0xcb49565f…2e82`](https://sepolia.basescan.org/tx/0xcb49565f94b3eb0f4ec74549da16b65f8f94d3e2bcd7c179f2f609f3adfe2e82).
+
+#### The live demo video (2026-11-27)
+
+The second video shows the loop next to the pool owner's terminal, the explorers, and a real swap. `loop-demo.mjs` ran
+with `STEPS=raise,raise-b,lower,reopen,lower-b,reopen-b`; its record is
+[`deployments/live-video-base-sepolia.json`](deployments/live-video-base-sepolia.json).
+
+| Step | Change (Base Sepolia) · block | Reaction (Lasna) | PoolGuard's answer · block | Change → answer |
+| --- | --- | --- | --- | --- |
+| Pool A fee 0.05% → 10% | [`0xfcc5fa72…dccc`](https://sepolia.basescan.org/tx/0xfcc5fa722eadb2931cf4b7287ed66f6b10bf139992346b10e7b59d0a134bdccc) · 64229895 | [`0xef898810…a06f`](https://lasna.reactscan.net/tx/0xef8988107b347a9c5b935d35f87a934c7b4cb966ed6f2ff0c8447b211c85a06f) | narrowed (2), [`0xef1b49a4…70c7`](https://sepolia.basescan.org/tx/0xef1b49a4e93a4c3d47cb418bc5303ddc45196509b6f0dc1018680f5ac5bf70c7) · 64229903 | 2 s · 8 blocks |
+| Pool B fee 0.05% → 10% | [`0xa7d5e4b7…3eeb`](https://sepolia.basescan.org/tx/0xa7d5e4b7540162b5738c2c13aee31d015eb3f52f2476b7f322071fcbb04c3eeb) · 64230260 | [`0x61775eec…b6eb`](https://lasna.reactscan.net/tx/0x61775eecf740633e5f335eebdb523e6d273a6b5bbcf2f52ab0d4636a4976b6eb) | narrowed (2), [`0xef909cdb…f2ee`](https://sepolia.basescan.org/tx/0xef909cdb0863d1f8474ffbe497f2edee74a881b0c0abde3010b4ee4aec6ff2ee) · 64230264 | 1 s · 4 blocks |
+| Pool A fee 10% → 0.05% | [`0x6238d2a6…c11d`](https://sepolia.basescan.org/tx/0x6238d2a68c08bb9953b99b05772e9c4dcc2555e615fe64e638fcc94b023cc11d) · 64230334 | [`0xbe417d2a…3af1`](https://lasna.reactscan.net/tx/0xbe417d2ab2d962859e6aaff8a0de32088e8120eb5f6740dc0c9f05a1e8c63af1) | kept narrowed (`MarkKept`), [`0xed2ed36a…1299`](https://sepolia.basescan.org/tx/0xed2ed36a1218291d73c11ad7e97b1019138bb4f39910bb36dc213fc1c3b31299) · 64230339 | 1 s · 5 blocks |
+| Reopen pool A | [`0xed7b7d63…3f11`](https://sepolia.basescan.org/tx/0xed7b7d630a43a5f2a3ab3a8d33f18cd2ba2347c7437fbf325e0b577cabbb3f11) · 64230412 | — | — | — |
+| Pool B fee 10% → 0.05% | [`0x4348bd3e…f755`](https://sepolia.basescan.org/tx/0x4348bd3e8eac8ab98afba9b4a9737231eda3f122eb594667c71863e11cf6f755) · 64230489 | [`0x59775771…914e`](https://lasna.reactscan.net/tx/0x5977577138d175d01a5a744f1a2e3483c5f871ec17c0b03ef79a2beb86bf914e) | kept narrowed (`MarkKept`), [`0xf085032b…d54e`](https://sepolia.basescan.org/tx/0xf085032baa2564c91ac0b81da9cdd568361b94ef2c9e32f4f63bf64c2099d54e) · 64230495 | 1 s · 6 blocks |
+| Reopen pool B | [`0x90564b37…3727`](https://sepolia.basescan.org/tx/0x90564b3769598e9e1c6075f927621a8e1f010bb142e2363455c027f673953727) · 64230558 | — | — | — |
+
+Between the first two steps, with pool A marked, the card quoted through pool B and a test wallet signed it: 10 USDC
+in, 0.00595765 ETH out, in three transactions (USDC approval for Permit2
+[`0x6b2d3f61…2822`](https://sepolia.basescan.org/tx/0x6b2d3f612a0322dfa1e52c594c65ad2f9bea6dbb78e7e46d79e0ba9b9e212822),
+Permit2 approval for the Universal Router
+[`0x33892647…7c5f`](https://sepolia.basescan.org/tx/0x338926472731100845aa9cf5bcd114a53dca93e30aebeb71f10c8d1627877c5f),
+the swap [`0xd0ab8f0b…a0ea`](https://sepolia.basescan.org/tx/0xd0ab8f0b77946f83eac41e75378a6cbceb57b8301988437dfb0cde32b8d5a0ea)
+· 64230145). With pool B marked too, the card stopped with no route; after the fee went back and the owner reopened
+pool A, it quoted through A again. Both pools ended at 0.05% and open.
 
 ### The event a Reactive contract subscribes to
 
