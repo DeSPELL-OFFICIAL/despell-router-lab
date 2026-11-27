@@ -280,7 +280,7 @@ its deployed bytecode can be rebuilt.
 | `script/Reopen.s.sol` | The owner reopens a test pool (`POOL_ID`, default pool A) | Base Sepolia |
 | `scripts/measure.mjs` | Changes the fee, waits for the mark, records the three transactions, reopens, repeats | both |
 | `scripts/route-demo.mjs` | Opens test pool B, then holds three states for the app's card: both marked, only A marked, both open | Base Sepolia |
-| `scripts/loop-demo.mjs` | One loop on pool A, a step per signal, for a screen recording: fee to 10% (marked), back to 0.05% (mark kept), reopen. Each run replaces its record (`OUT`), by default the video's | Base Sepolia |
+| `scripts/loop-demo.mjs` | The loop a step per signal, for a screen recording: a pool's fee to 10% (marked), back to 0.05% (mark kept), reopen. `STEPS` picks pool A, pool B or both (both marked: no route); each pool's three steps run in that order, so a finished run leaves both open. Each run replaces its record (`OUT`), by default the first video's | Base Sepolia |
 | `scripts/chain.mjs` | The JSON-RPC reads, forge runs, reaction lookup and mark wait the three scripts above share | — |
 | `scripts/report.mjs` | Turns a measurement into `deployments/reflex-page.json` and this README's latency table (no key) | — |
 
