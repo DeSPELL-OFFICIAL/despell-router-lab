@@ -284,9 +284,9 @@ What a replay checks, and what it does not:
 | Reflex only | 0 | 0 |
 | Unchanged | 44 | 44 |
 | Not replayable | 0 | |
-| Newer rule (`joseon_v2`, `naru_v2` pools) | 11 | not compared |
+| Newer rule (`joseon_v2`, `naru_v2` pools) | 11 (3 judged) | not compared |
 
-Another 13 lines are trade checks, not patrol steps. The record is young and narrow. Of the six judged steps, one moved a stage: a `uniswap_v3` pool opened from `unknown` to `probation` after a full review with passing probes. The other five were restricts that kept `ammora_curve` pools at `unknown`, and no reflex fired that week. So this replay checks the opening path and the holding restrict on real steps; the other rules rest on the 2^27 comparison above. The 50 replayed steps came to 7 distinct inputs. The export stays outside this repository, since it comes from the router's private database, so only someone holding an export can run it again.
+Another 13 lines are trade checks, not patrol steps. The record is young and narrow. Of the six judged steps, one moved a stage: a `uniswap_v3` pool opened from `unknown` to `probation` after a full review with passing probes. The other five were restricts that kept `ammora_curve` pools at `unknown`, and no reflex fired that week. So this replay checks the opening path and the holding restrict on real steps; the other rules rest on the two comparisons in [Evidence](#evidence): the rule function against the server's own code, and the circuit against the rule function on all 2^27 inputs. The 50 replayed steps came to 7 distinct inputs. The export stays outside this repository, since it comes from the router's private database, so only someone holding an export can run it again.
 
 ## What the circuit leaves out
 
