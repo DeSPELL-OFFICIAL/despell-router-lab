@@ -1,22 +1,17 @@
-import Link from "next/link";
-import { CONTESTS } from "@/lib/contests";
 import { ThemeToggle } from "./theme-toggle";
 import { WalletSlot } from "./wallet-slot";
 
+/*
+  No links between demos: judges reach each contest page by its own address,
+  so the header carries only the wordmark (plain text), the theme switch and
+  the wallet slot.
+*/
 export function SiteHeader() {
   return (
     <header className="lab-header">
-      <Link href="/" className="lab-brand">
+      <span className="lab-brand">
         DeSpell <span className="lab-brand-sub">Router Lab</span>
-      </Link>
-      <nav aria-label="Hackathons" className="lab-nav">
-        <Link href="/swap">Test swap</Link>
-        {CONTESTS.map((c) => (
-          <Link key={c.slug} href={`/${c.slug}`}>
-            {c.hackathon}
-          </Link>
-        ))}
-      </nav>
+      </span>
       <div className="lab-header-end">
         <ThemeToggle />
         <WalletSlot />
