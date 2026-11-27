@@ -31,13 +31,10 @@ code { font-family: var(--ds-font-mono); font-size: 0.92em; }
 }
 .lab-brand { display: inline-flex; align-items: baseline; gap: 8px; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--ds-wordmark); text-decoration: none; white-space: nowrap; }
 .lab-brand-sub { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--ds-fg-dim); }
-.lab-nav { display: flex; gap: 4px; min-width: 0; overflow-x: auto; }
-.lab-nav a { padding: 6px 10px; border-radius: var(--ds-r-md); font-size: 13px; color: var(--ds-fg-dim); text-decoration: none; white-space: nowrap; }
-.lab-nav a:hover { color: var(--ds-fg-bright); background: var(--ds-tint-2); }
 .lab-header-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .lab-icon-btn { display: inline-grid; place-items: center; width: var(--ds-hit); height: var(--ds-hit); border-radius: var(--ds-r-md); border: 1px solid transparent; background: transparent; color: var(--ds-fg-dim); cursor: pointer; }
 .lab-icon-btn:hover { color: var(--ds-fg-bright); border-color: var(--ds-line-4); }
-.lab-icon-btn:focus-visible, .lab-nav a:focus-visible, .lab-brand:focus-visible, .lab-tile:focus-visible { outline: 2px solid var(--ds-accent-ink); outline-offset: 2px; }
+.lab-icon-btn:focus-visible, .lab-tile:focus-visible { outline: 2px solid var(--ds-accent-ink); outline-offset: 2px; }
 
 /* page */
 .lab-main { max-width: 1120px; margin: 0 auto; padding: 56px 24px 96px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
@@ -93,7 +90,8 @@ code { font-family: var(--ds-font-mono); font-size: 0.92em; }
 .lab-intent[aria-pressed="true"] { border-color: var(--ds-accent-ink); color: var(--ds-accent-ink); background: color-mix(in srgb, var(--ds-accent) 10%, transparent); }
 .lab-intent:focus-visible, .lab-wallet .ds-btn:focus-visible { outline: 2px solid var(--ds-accent-ink); outline-offset: 2px; }
 .lab-swap-grid { display: grid; grid-template-columns: repeat(2, minmax(0, var(--ds-card-w))); gap: 24px; align-items: start; }
-.lab-swap { display: grid; gap: 10px; min-width: 0; }
+/* minmax(0, …) lets the 480 card shrink on a phone instead of widening the page. */
+.lab-swap { display: grid; grid-template-columns: minmax(0, var(--ds-card-w)); gap: 10px; min-width: 0; }
 .lab-swap-help { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 4px; font-size: 12.5px; color: var(--ds-fg-dim); }
 .lab-swap-help code { font-size: 11.5px; }
 
@@ -129,13 +127,7 @@ code { font-family: var(--ds-font-mono); font-size: 0.92em; }
   .lab-swap-grid { grid-template-columns: minmax(0, var(--ds-card-w)); }
 }
 @media (max-width: 640px) {
-  .lab-header { flex-wrap: wrap; height: auto; padding: 10px 16px 6px; gap: 6px 12px; }
-  .lab-nav {
-    order: 3; flex-basis: 100%; margin: 0 -10px; padding-right: 24px;
-    /* Fade the right edge so the row reads as scrollable. */
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-  }
+  .lab-header { padding: 0 16px; gap: 12px; }
   .lab-main { padding: 32px 16px 64px; }
   .lab-tiles { grid-template-columns: minmax(0, 1fr); }
 }
