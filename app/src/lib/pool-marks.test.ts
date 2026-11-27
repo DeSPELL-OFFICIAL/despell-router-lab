@@ -1,6 +1,6 @@
 import type { Hex, PublicClient } from "viem";
 import { describe, expect, it } from "vitest";
-import { agoText, leftOut, markGate, markNote, MARKS_MAX_AGE_MS, readMarks, type MarksRead } from "./pool-marks";
+import { agoText, leftOut, markGate, markNote, markNow, MARKS_MAX_AGE_MS, readMarks, type MarksRead } from "./pool-marks";
 import { BASE_SEPOLIA } from "./swap/chains";
 
 const [A, B] = BASE_SEPOLIA.pools;
@@ -114,5 +114,28 @@ describe("the left-out row", () => {
       "47 h ago",
       "2 d ago",
     ]);
+  });
+});
+
+describe("the marks table's Mark now cell", () => {
+  it("shows the server's read only until the first 2-second read answers", () => {
+    expect(markNow(A.id, null, null, 0)).toEqual({ kind: "status", status: 0, from: "server" });
+    expect(markNow(A.id, null, null, null)).toEqual({ kind: "none", reason: null });
+  });
+
+  it("follows the card's read, pool by pool, whatever the server said", () => {
+    const read = readOf(2, 0);
+    expect(markNow(A.id, read, null, 0)).toEqual({ kind: "status", status: 2, from: "chain" });
+    expect(markNow(B.id.toUpperCase().replace("0X", "0x"), read, null, 3)).toEqual({ kind: "status", status: 0, from: "chain" });
+  });
+
+  it("shows a dash and the reason when the latest read failed, not the earlier answer", () => {
+    const failed = Object.assign(new Error("long message\nwith detail"), { shortMessage: "HTTP request failed. Status: 429" });
+    expect(markNow(A.id, readOf(2, 0), failed, 2)).toEqual({ kind: "none", reason: "read failed: HTTP request failed. Status: 429" });
+    expect(markNow(A.id, null, "x".repeat(200), 0)).toEqual({ kind: "none", reason: `read failed: ${"x".repeat(79)}…` });
+  });
+
+  it("says so for a pool the card does not read", () => {
+    expect(markNow(`0x${"cd".repeat(32)}`, readOf(0, 0), null, 0)).toEqual({ kind: "none", reason: "not one of the card's pools" });
   });
 });

@@ -120,3 +120,25 @@ export function markNote(mark: PoolMark, readAt: number): string {
   const what = mark.status >= BLOCKED ? "blocked on-chain" : "marked on-chain";
   return `${what} · ${agoText(readAt - mark.markedAt)}`;
 }
+
+/** The react-query key the card and the page's marks table share, so one 2-second read feeds both. */
+export const marksKey = (chainId: number) => ["pool-marks", chainId] as const;
+
+export type MarkNow = { kind: "status"; status: number; from: "server" | "chain" } | { kind: "none"; reason: string | null };
+
+/**
+ * The marks table's "Mark now" cell for one pool. The latest 2-second read decides; before the first one answers, the
+ * server's read gives the first paint. When the latest read failed, the cell shows no status and says why, rather than
+ * keep an earlier answer on screen as if it were current.
+ */
+export function markNow(poolId: string, read: MarksRead | null, error: unknown, initial: number | null): MarkNow {
+  if (error) {
+    const text = (error instanceof Error ? ((error as { shortMessage?: string }).shortMessage ?? error.message) : String(error)).split("\n")[0];
+    return { kind: "none", reason: `read failed: ${text.length > 80 ? `${text.slice(0, 79)}…` : text}` };
+  }
+  if (read) {
+    const mark = read.marks.find((m) => m.pool.id.toLowerCase() === poolId.toLowerCase());
+    return mark ? { kind: "status", status: mark.status, from: "chain" } : { kind: "none", reason: "not one of the card's pools" };
+  }
+  return initial === null ? { kind: "none", reason: null } : { kind: "status", status: initial, from: "server" };
+}
