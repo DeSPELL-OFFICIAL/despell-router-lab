@@ -13,6 +13,8 @@ The DeSpell router watches every pool it might route a trade through. When somet
 
 The circuit is a second, public copy of the judgment. The server stays the one that decides; the app compares the two and holds a card when they differ. TapeOut's netlist format is a draft and its contracts are not audited, so a circuit result is supporting evidence, never the only check.
 
+[Open the live X Layer demo](https://lab.despell.io/xlayer) or [watch the circuit comparison and journal replay (1:21)](https://github.com/DeSPELL-OFFICIAL/despell-router-lab/releases/download/hackathon-demos-2026-11/demo-v2.mp4).
+
 ## Folder
 
 | Path | What it is |

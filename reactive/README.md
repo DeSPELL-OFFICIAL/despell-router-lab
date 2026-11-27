@@ -134,7 +134,7 @@ A run of the same script minutes earlier (its recording stopped on a bug in the 
 
 #### The live demo video (2026-11-27)
 
-The second video shows the loop next to the pool owner's terminal, the explorers, and a real swap. `loop-demo.mjs` ran
+[Watch the live Reactive demo (2:22)](https://github.com/DeSPELL-OFFICIAL/despell-router-lab/releases/download/hackathon-demos-2026-11/demo-v3.mp4). It shows the loop next to the pool owner's terminal, the explorers, and a testnet swap. `loop-demo.mjs` ran
 with `STEPS=raise,raise-b,lower,reopen,lower-b,reopen-b`; its record is
 [`deployments/live-video-base-sepolia.json`](deployments/live-video-base-sepolia.json).
 
