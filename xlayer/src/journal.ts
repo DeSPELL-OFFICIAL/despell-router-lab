@@ -122,16 +122,19 @@ export type PatrolStep = {
   readonly lines: readonly JournalLine[];
 };
 
+/** Lines a trade writes when it checks a pool (`trade_check`): they record the lane at quote time and never move a stage. */
+export const TRADE_CHECK_REASON = "trade_check";
+
 /**
- * Groups lines into patrol steps (same pool, time and fingerprint), oldest first. Operator lines and any other line
- * without a fingerprint are not patrol steps; they are returned apart and counted, not replayed.
+ * Groups lines into patrol steps (same pool, time and fingerprint), oldest first. Operator lines, trade check lines and
+ * any other line without a fingerprint are not patrol steps; they are returned apart and counted, not replayed.
  */
 export function patrolSteps(journal: JournalExport): { readonly steps: readonly PatrolStep[]; readonly other: readonly JournalLine[] } {
   const sorted = [...journal.lines].sort((a, b) => a.seq - b.seq);
   const groups = new Map<string, { pool: string; at: string; fingerprint: string; seq: number; lines: JournalLine[] }>();
   const other: JournalLine[] = [];
   for (const line of sorted) {
-    if (line.actor === "operator" || line.fingerprint === null) {
+    if (line.actor === "operator" || line.reason === TRADE_CHECK_REASON || line.fingerprint === null) {
       other.push(line);
       continue;
     }

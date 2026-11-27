@@ -260,7 +260,7 @@ node scripts/replay-journal.ts --file <export.json>           # the committed ne
 node scripts/replay-journal.ts --file <export.json> --chain   # eval on X Layer, circuit 1 on the DeSpell processor
 ```
 
-The first line of the report counts **judged steps**, where the AI's judgment was applied and the circuit has to rebuild the whole transition: "M of N judged patrol steps". The next line gives the other two kinds on their own, so they do not swell that count: **reflex only** (no judgment, at least one reflex fired) and **unchanged** (no judgment, no reflex). Then come every difference (pool, time, kind, reason, server stage, circuit stage), every step that could not be replayed and every step judged by a newer rule, each with its reason. The command exits 0 when no replayed step differs, 1 when one does, and 2 when it has nothing trustworthy to report: bad arguments, an export that fails its checks, or, with `--chain`, no circuit at that id, an address with no code, a circuit that is not the committed one, another chain, or the RPC failing part way.
+The first line of the report counts **judged steps**, where the AI's judgment was applied and the circuit has to rebuild the whole transition: "M of N judged patrol steps agree". The next line gives the other two kinds on their own, so they do not swell that count: **reflex only** (no judgment, at least one reflex fired) and **unchanged** (no judgment, no reflex). Lines that are not patrol steps (operator lines, and the trade check lines a trade writes when it looks at a pool at quote time) are counted by reason and not replayed. Then come every difference (pool, time, kind, reason, server stage, circuit stage), every step that could not be replayed and every step judged by a newer rule, each with its reason. The command exits 0 when no replayed step differs, 1 when one does, and 2 when it has nothing trustworthy to report: bad arguments, an export that fails its checks, or, with `--chain`, no circuit at that id, an address with no code, a circuit that is not the committed one, another chain, or the RPC failing part way.
 
 The journal lives in the router's private database. Nothing in this repository connects to it: whoever can read it exports the lines to a JSON file in the shape `src/journal.ts` checks (`JournalExport`: chain, lines, and each pool's family from its card), and the script reads that file.
 
@@ -274,7 +274,19 @@ What a replay checks, and what it does not:
 - **Steps the AI did not judge are replayed with no decision**: no change, a watch-only family, a deferred or cut review. A pool under an operator block is not read by the patrol, so it has no step.
 - **Pin 18** is clear only when the judge's token reading and the step's own reading are both clear (the server proposes with the first and applies with the second).
 
-`test/fixtures/journal-sample.json` is made up: 41 lines covering those cases, with one step that cannot be replayed (no probe line), one reused judgment whose recorded proposal is outside the rules (made up to show how that difference is reported) and one step of a family added later. On it the committed netlist and `eval` on X Layer both report 8 of 9 judged steps, the one difference being that made-up line, and 1 of 1 reflex only, 3 of 3 unchanged; without that line, 8 of 8. The tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference, and that each exit code comes from its case.
+`test/fixtures/journal-sample.json` is made up: 42 lines covering those cases, with a trade check line, one step that cannot be replayed (no probe line), one reused judgment whose recorded proposal is outside the rules (made up to show how that difference is reported) and one step of a family added later. On it the committed netlist and `eval` on X Layer both report 8 of 9 judged steps, the one difference being that made-up line, and 1 of 1 reflex only, 3 of 3 unchanged; without that line, 8 of 8. The tests also check that a changed server stage, or a circuit that answers wrongly, shows up as a difference, and that each exit code comes from its case.
+
+**On the router's journal.** The journal was exported on 2026-11-27 at 06:41 UTC: 146 lines written from 2026-11-20 to 2026-11-27, 11 pools, 61 patrol steps. Replayed through the committed netlist and through `eval` on X Layer (circuit 1), with the same result both ways:
+
+| Kind of step | Steps | The circuit agrees |
+| --- | --- | --- |
+| Judged | 6 | 6 |
+| Reflex only | 0 | 0 |
+| Unchanged | 44 | 44 |
+| Not replayable | 0 | |
+| Newer rule (`joseon_v2`, `naru_v2` pools) | 11 (3 judged) | not compared |
+
+Another 13 lines are trade checks, not patrol steps. The record is young and narrow. Of the six judged steps, one moved a stage: a `uniswap_v3` pool opened from `unknown` to `probation` after a full review with passing probes. The other five were restricts that kept `ammora_curve` pools at `unknown`, and no reflex fired that week. So this replay checks the opening path and the holding restrict on real steps; the other rules rest on the two comparisons in [Evidence](#evidence): the rule function against the server's own code, and the circuit against the rule function on all 2^27 inputs. The 50 replayed steps came to 7 distinct inputs. The export stays outside this repository, since it comes from the router's private database, so only someone holding an export can run it again.
 
 ## What the circuit leaves out
 
