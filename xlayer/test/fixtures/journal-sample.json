@@ -90,8 +90,27 @@
     },
     {
       "pool": "0x1111111111111111111111111111111111111111",
-      "at": "2026-11-20T03:00:00.000Z",
+      "at": "2026-11-20T02:30:00.000Z",
       "seq": 105,
+      "actor": "probe",
+      "detail": null,
+      "reason": "trade_check",
+      "evidence": {
+        "lane": "fast",
+        "lossBps": 41,
+        "amountRaw": "1000000",
+        "elapsedMs": 900,
+        "sellReverted": false,
+        "codeHashMatches": true
+      },
+      "before": "probation",
+      "after": "probation",
+      "fingerprint": null
+    },
+    {
+      "pool": "0x1111111111111111111111111111111111111111",
+      "at": "2026-11-20T03:00:00.000Z",
+      "seq": 106,
       "actor": "reflex",
       "detail": "fee_changed",
       "reason": "fee_changed",
@@ -106,7 +125,7 @@
     {
       "pool": "0x1111111111111111111111111111111111111111",
       "at": "2026-11-20T03:00:00.000Z",
-      "seq": 106,
+      "seq": 107,
       "actor": "probe",
       "detail": null,
       "reason": "fee_changed",
@@ -120,7 +139,7 @@
     {
       "pool": "0x1111111111111111111111111111111111111111",
       "at": "2026-11-20T04:00:00.000Z",
-      "seq": 107,
+      "seq": 108,
       "actor": "probe",
       "detail": null,
       "reason": "stale",
@@ -134,7 +153,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T01:05:00.000Z",
-      "seq": 108,
+      "seq": 109,
       "actor": "probe",
       "detail": null,
       "reason": "first_seen",
@@ -146,7 +165,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T01:05:00.000Z",
-      "seq": 109,
+      "seq": 110,
       "actor": "role",
       "detail": "judge",
       "reason": "first_seen",
@@ -166,7 +185,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T01:05:00.000Z",
-      "seq": 110,
+      "seq": 111,
       "actor": "trust_rule",
       "detail": null,
       "reason": "raise_needs_probe",
@@ -187,7 +206,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T05:00:00.000Z",
-      "seq": 111,
+      "seq": 112,
       "actor": "reflex",
       "detail": "code_changed",
       "reason": "code_changed",
@@ -202,7 +221,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T05:00:00.000Z",
-      "seq": 112,
+      "seq": 113,
       "actor": "probe",
       "detail": null,
       "reason": "code_changed",
@@ -214,7 +233,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T05:00:00.000Z",
-      "seq": 113,
+      "seq": 114,
       "actor": "role",
       "detail": "judge",
       "reason": "code_changed",
@@ -234,7 +253,7 @@
     {
       "pool": "0x2222222222222222222222222222222222222222",
       "at": "2026-11-20T05:00:00.000Z",
-      "seq": 114,
+      "seq": 115,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_raised",
@@ -255,7 +274,7 @@
     {
       "pool": "0x3333333333333333333333333333333333333333",
       "at": "2026-11-20T01:10:00.000Z",
-      "seq": 115,
+      "seq": 116,
       "actor": "probe",
       "detail": null,
       "reason": "first_seen",
@@ -267,7 +286,7 @@
     {
       "pool": "0x3333333333333333333333333333333333333333",
       "at": "2026-11-20T01:10:00.000Z",
-      "seq": 116,
+      "seq": 117,
       "actor": "role",
       "detail": "judge",
       "reason": "first_seen",
@@ -287,7 +306,7 @@
     {
       "pool": "0x3333333333333333333333333333333333333333",
       "at": "2026-11-20T01:10:00.000Z",
-      "seq": 117,
+      "seq": 118,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_raised",
@@ -308,7 +327,7 @@
     {
       "pool": "0x4444444444444444444444444444444444444444",
       "at": "2026-11-20T01:15:00.000Z",
-      "seq": 118,
+      "seq": 119,
       "actor": "probe",
       "detail": null,
       "reason": "first_seen",
@@ -320,7 +339,7 @@
     {
       "pool": "0x4444444444444444444444444444444444444444",
       "at": "2026-11-20T01:15:00.000Z",
-      "seq": 119,
+      "seq": 120,
       "actor": "role",
       "detail": "judge",
       "reason": "first_seen",
@@ -340,7 +359,7 @@
     {
       "pool": "0x4444444444444444444444444444444444444444",
       "at": "2026-11-20T01:15:00.000Z",
-      "seq": 120,
+      "seq": 121,
       "actor": "trust_rule",
       "detail": null,
       "reason": "raise_needs_probe",
@@ -361,7 +380,7 @@
     {
       "pool": "0x5555555555555555555555555555555555555555",
       "at": "2026-11-20T01:20:00.000Z",
-      "seq": 121,
+      "seq": 122,
       "actor": "probe",
       "detail": null,
       "reason": "first_seen",
@@ -375,7 +394,7 @@
     {
       "pool": "0x6666666666666666666666666666666666666666",
       "at": "2026-11-21T01:00:00.000Z",
-      "seq": 122,
+      "seq": 123,
       "actor": "reflex",
       "detail": "owner_changed",
       "reason": "owner_changed",
@@ -390,7 +409,7 @@
     {
       "pool": "0x6666666666666666666666666666666666666666",
       "at": "2026-11-21T01:00:00.000Z",
-      "seq": 123,
+      "seq": 124,
       "actor": "probe",
       "detail": null,
       "reason": "owner_changed",
@@ -402,7 +421,7 @@
     {
       "pool": "0x6666666666666666666666666666666666666666",
       "at": "2026-11-21T01:00:00.000Z",
-      "seq": 124,
+      "seq": 125,
       "actor": "role",
       "detail": "judge",
       "reason": "owner_changed",
@@ -422,7 +441,7 @@
     {
       "pool": "0x6666666666666666666666666666666666666666",
       "at": "2026-11-21T01:00:00.000Z",
-      "seq": 125,
+      "seq": 126,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_lowered",
@@ -443,7 +462,7 @@
     {
       "pool": "0x6666666666666666666666666666666666666666",
       "at": "2026-11-21T02:00:00.000Z",
-      "seq": 126,
+      "seq": 127,
       "actor": "operator",
       "detail": null,
       "reason": "operator_blocked",
@@ -457,7 +476,7 @@
     {
       "pool": "0x7777777777777777777777777777777777777777",
       "at": "2026-11-21T01:05:00.000Z",
-      "seq": 127,
+      "seq": 128,
       "actor": "reflex",
       "detail": "fee_changed",
       "reason": "fee_changed",
@@ -472,7 +491,7 @@
     {
       "pool": "0x7777777777777777777777777777777777777777",
       "at": "2026-11-21T01:05:00.000Z",
-      "seq": 128,
+      "seq": 129,
       "actor": "probe",
       "detail": null,
       "reason": "fee_changed",
@@ -484,7 +503,7 @@
     {
       "pool": "0x7777777777777777777777777777777777777777",
       "at": "2026-11-21T01:05:00.000Z",
-      "seq": 129,
+      "seq": 130,
       "actor": "role",
       "detail": "judge",
       "reason": "fee_changed",
@@ -504,7 +523,7 @@
     {
       "pool": "0x7777777777777777777777777777777777777777",
       "at": "2026-11-21T01:05:00.000Z",
-      "seq": 130,
+      "seq": 131,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_kept",
@@ -525,7 +544,7 @@
     {
       "pool": "0x8888888888888888888888888888888888888888",
       "at": "2026-11-21T01:10:00.000Z",
-      "seq": 131,
+      "seq": 132,
       "actor": "probe",
       "detail": null,
       "reason": "no_change",
@@ -537,7 +556,7 @@
     {
       "pool": "0x8888888888888888888888888888888888888888",
       "at": "2026-11-21T01:10:00.000Z",
-      "seq": 132,
+      "seq": 133,
       "actor": "role",
       "detail": "judge",
       "reason": "no_change",
@@ -557,7 +576,7 @@
     {
       "pool": "0x8888888888888888888888888888888888888888",
       "at": "2026-11-21T01:10:00.000Z",
-      "seq": 133,
+      "seq": 134,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_raised",
@@ -578,7 +597,7 @@
     {
       "pool": "0x9999999999999999999999999999999999999999",
       "at": "2026-11-21T01:15:00.000Z",
-      "seq": 134,
+      "seq": 135,
       "actor": "role",
       "detail": "code_forensics",
       "reason": "first_seen",
@@ -593,7 +612,7 @@
     {
       "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "at": "2026-11-21T01:20:00.000Z",
-      "seq": 135,
+      "seq": 136,
       "actor": "probe",
       "detail": null,
       "reason": "no_change",
@@ -605,7 +624,7 @@
     {
       "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "at": "2026-11-21T01:20:00.000Z",
-      "seq": 136,
+      "seq": 137,
       "actor": "role",
       "detail": "judge",
       "reason": "no_change",
@@ -625,7 +644,7 @@
     {
       "pool": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "at": "2026-11-21T01:20:00.000Z",
-      "seq": 137,
+      "seq": 138,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_raised",
@@ -646,7 +665,7 @@
     {
       "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "at": "2026-11-26T09:00:00.000Z",
-      "seq": 138,
+      "seq": 139,
       "actor": "probe",
       "detail": null,
       "reason": "first_seen",
@@ -658,7 +677,7 @@
     {
       "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "at": "2026-11-26T09:00:00.000Z",
-      "seq": 139,
+      "seq": 140,
       "actor": "role",
       "detail": "judge",
       "reason": "first_seen",
@@ -678,7 +697,7 @@
     {
       "pool": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "at": "2026-11-26T09:00:00.000Z",
-      "seq": 140,
+      "seq": 141,
       "actor": "trust_rule",
       "detail": null,
       "reason": "trust_raised",

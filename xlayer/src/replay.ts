@@ -41,13 +41,15 @@ export type Tally = { readonly replayed: number; readonly same: number };
 export type ReplayReport = {
   /** Journal lines read. */
   readonly lines: number;
-  /** Lines that are not part of a patrol step (operator lines). */
+  /** Lines that are not part of a patrol step (operator lines, trade checks). */
   readonly otherLines: number;
+  /** The same lines by actor and reason, such as `probe trade_check` or `operator operator_blocked`. */
+  readonly otherByReason: Readonly<Record<string, number>>;
   /** Patrol steps found. */
   readonly steps: number;
   /** Steps whose input bits could be built and were given to the circuit, all kinds together. */
   readonly replayed: number;
-  /** Replayed steps where the circuit's stage equals the server's, all kinds together. */
+  /** Replayed steps where the circuit agrees with the server's stage, all kinds together. */
   readonly same: number;
   /** The same two counts per kind of step. `judged` is the headline. */
   readonly byKind: Readonly<Record<StepKind, Tally>>;
@@ -105,9 +107,12 @@ export async function replayJournal(journal: JournalExport, circuit: CircuitJudg
     if (reason === null) byKind[item.stepKind].same += 1;
     else differences.push({ pool: item.pool, at: item.at, stepKind: item.stepKind, reason, server: item.server, circuit: circuitStage, vector: item.vector, proposal: item.proposal });
   }
+  const otherByReason: Record<string, number> = {};
+  for (const line of other) otherByReason[`${line.actor} ${line.reason}`] = (otherByReason[`${line.actor} ${line.reason}`] ?? 0) + 1;
   return {
     lines: journal.lines.length,
     otherLines: other.length,
+    otherByReason,
     steps: encoded.length,
     replayed: replayable.length,
     same: replayable.length - differences.length,
@@ -126,13 +131,17 @@ const KIND_LABEL: Readonly<Record<StepKind, string>> = { judged: "judged", refle
 export function formatReplay(report: ReplayReport): string {
   const out: string[] = [];
   const { judged } = report.byKind;
-  out.push(`${judged.same} of ${judged.replayed} judged patrol steps: the circuit's stage equals the server's`);
+  out.push(`${judged.same} of ${judged.replayed} judged patrol steps agree: the circuit gives the stage the server wrote`);
   out.push(
     `by kind: ${STEP_KINDS.map((kind) => `${KIND_LABEL[kind]} ${report.byKind[kind].same} of ${report.byKind[kind].replayed}`).join(" · ")} · all ${report.same} of ${report.replayed}`,
   );
   out.push(
-    `journal lines ${report.lines} · patrol steps ${report.steps} · replayed ${report.replayed} · not replayable ${report.notReplayableSteps.length} · newer rule than the circuit ${report.newerRule.length} · operator lines, not steps ${report.otherLines} · distinct inputs ${report.vectors}`,
+    `journal lines ${report.lines} · patrol steps ${report.steps} · replayed ${report.replayed} · not replayable ${report.notReplayableSteps.length} · newer rule than the circuit ${report.newerRule.length} · lines outside patrol steps ${report.otherLines} · distinct inputs ${report.vectors}`,
   );
+  if (report.otherLines > 0) {
+    const reasons = Object.entries(report.otherByReason).sort(([a], [b]) => (a < b ? -1 : 1));
+    out.push(`  lines outside patrol steps: ${reasons.map(([reason, count]) => `${reason} ${count}`).join(" · ")}`);
+  }
   if (report.differences.length > 0) {
     const count = (reason: DifferenceReason) => report.differences.filter((d) => d.reason === reason).length;
     out.push(`  differences ${report.differences.length}: the circuit's stage ${count("stage")} · a recorded proposal outside the circuit's rules ${count("proposal_outside_rules")}`);

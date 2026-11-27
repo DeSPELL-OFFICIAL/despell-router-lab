@@ -43,13 +43,20 @@ test("an export is checked before anything is replayed", () => {
   assert.throws(() => parseJournalExport({ ...good, pools: [{ pool: pool("1") }] }), /pools\[0\]: family is not a string/u);
 });
 
-test("lines group into patrol steps; operator lines are not steps", () => {
+test("lines group into patrol steps; operator lines and trade checks are not steps", () => {
   const { steps, other } = patrolSteps(sample());
   assert.equal(steps.length, 15);
   assert.deepEqual(
-    other.map((line) => line.actor),
-    ["operator"],
+    other.map((line) => `${line.actor} ${line.reason}`),
+    ["probe trade_check", "operator operator_blocked"],
   );
+  // A trade check is not a patrol step even if it carries a fingerprint: it would count as an unchanged step.
+  const journal = sample();
+  const marked: JournalExport = {
+    ...journal,
+    lines: journal.lines.map((line) => (line.reason === "trade_check" ? { ...line, fingerprint: `0x${"ee".repeat(32)}` } : line)),
+  };
+  assert.equal(patrolSteps(marked).steps.length, 15);
   // A step keeps its lines in write order.
   const first = steps.find((step) => step.pool === pool("1") && step.at === "2026-11-20T01:00:00.000Z");
   assert.deepEqual(first?.lines.map((line) => line.actor), ["probe", "role", "role", "trust_rule"]);
@@ -190,9 +197,10 @@ test("steps the journal cannot rebuild are counted apart, never guessed", () => 
 test("replaying the sample: the committed netlist and the rule function both give the server's stage on every step the rules cover", async () => {
   for (const circuit of [localCircuit, ruleFunction]) {
     const report = await replayJournal(sample(), circuit);
-    assert.equal(report.lines, 41);
+    assert.equal(report.lines, 42);
     assert.equal(report.steps, 15);
-    assert.equal(report.otherLines, 1);
+    assert.equal(report.otherLines, 2);
+    assert.deepEqual(report.otherByReason, { "probe trade_check": 1, "operator operator_blocked": 1 });
     assert.equal(report.replayed, 13);
     assert.equal(report.same, 12);
     assert.deepEqual(report.byKind, { judged: { replayed: 9, same: 8 }, reflex_only: { replayed: 1, same: 1 }, unchanged: { replayed: 3, same: 3 } });
@@ -207,7 +215,8 @@ test("replaying the sample: the committed netlist and the rule function both giv
   }
   const text = formatReplay(await replayJournal(sample(), localCircuit));
   // The headline counts judged steps only, so steps where nothing could differ do not swell it.
-  assert.match(text, /^8 of 9 judged patrol steps: the circuit's stage equals the server's\n/u);
+  assert.match(text, /^8 of 9 judged patrol steps agree: the circuit gives the stage the server wrote\n/u);
+  assert.match(text, /\n {2}lines outside patrol steps: operator operator_blocked 1 · probe trade_check 1\n/u);
   assert.match(text, /\nby kind: judged 8 of 9 · reflex only 1 of 1 · unchanged 3 of 3 · all 12 of 13\n/u);
   assert.match(text, /differences 1: the circuit's stage 0 · a recorded proposal outside the circuit's rules 1/u);
   assert.match(text, /proposal outside the rules: recorded probation, the circuit's rules give restricted from the journal's facts {2}server probation {2}circuit restricted/u);
