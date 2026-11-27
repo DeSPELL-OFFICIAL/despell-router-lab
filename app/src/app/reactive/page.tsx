@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MarkNowCell } from "@/components/reactive/mark-now-cell";
 import { MarkedPoolSwap } from "@/components/reactive/marked-pool-swap";
 import {
   hookPools,
@@ -23,7 +24,8 @@ export const metadata: Metadata = {
     "A pool setting changes, and a Reactive contract marks that pool as narrowed on-chain about a second later. Measured on testnets, with every transaction.",
 };
 
-// The record is fixed at build time; the live PoolGuard read refreshes at most once a minute.
+// The record is fixed at build time. The server's PoolGuard read (at most once a minute) is only the first paint: the
+// marks table's "Mark now" then follows the card's 2-second read.
 export const revalidate = 60;
 
 const STATUS_TONE: Record<number, string> = { 0: styles.isOpen, 1: styles.isNarrow, 2: styles.isNarrow, 3: styles.isBlocked };
@@ -265,7 +267,9 @@ export default async function Page() {
                     <td className={styles.num}>{run?.origin?.block ?? "—"}</td>
                     <td className={styles.num}>{run?.mark?.block ?? "—"}</td>
                     <td className={styles.num}>{run ? `${run.seconds} s · ${run.blocks} blocks` : "—"}</td>
-                    <td>{now ? <Status status={now.status} /> : <span className="ds-dim">—</span>}</td>
+                    <td>
+                      <MarkNowCell poolId={pool.poolId} initial={now?.status ?? null} labels={page.statusLabels} badgeClass={styles.st} tones={STATUS_TONE} />
+                    </td>
                   </tr>
                 );
               })}

@@ -1,14 +1,13 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import type { PublicClient } from "viem";
-import { usePublicClient } from "wagmi";
 import { SignCardRow } from "@/components/sign-card/sign-card";
 import { DEMO_USDC } from "@/components/swap/swap-demo";
 import { SwapCard } from "@/components/swap/swap-card";
-import { leftOut, markGate, markNote, MARKS_POLL_MS, readMarks } from "@/lib/pool-marks";
+import { leftOut, markGate, markNote, marksKey, readMarks } from "@/lib/pool-marks";
 import { BASE_SEPOLIA } from "@/lib/swap/chains";
+import { useMarks } from "./use-marks";
 
 /*
   The Reactive Omni card: the shared Base Sepolia swap card, with PoolGuard
@@ -19,20 +18,13 @@ import { BASE_SEPOLIA } from "@/lib/swap/chains";
   transaction, stopping if the pool the plan swaps through is marked. A mark
   that lands while the wallet's window is open is not seen until the next
   transaction; the plan's deadline bounds how long that window can be.
+  The page's marks table uses the same PoolGuard read (useMarks).
 */
 
-const MARKS_KEY = ["pool-marks", BASE_SEPOLIA.id] as const;
-
 export function MarkedPoolSwap() {
-  const client = usePublicClient({ chainId: BASE_SEPOLIA.id }) as unknown as PublicClient | undefined;
   const queryClient = useQueryClient();
-  const marksQ = useQuery({
-    queryKey: MARKS_KEY,
-    queryFn: () => readMarks(client!, BASE_SEPOLIA),
-    enabled: Boolean(client),
-    refetchInterval: MARKS_POLL_MS,
-    retry: 1,
-  });
+  const marksQ = useMarks();
+  const client = marksQ.client;
   // The gate ages the last read by this clock, so a read that stopped coming closes it without a new render cause.
   // It starts at the real time: a read cached from an earlier visit must not look fresh on the first render.
   const [now, setNow] = useState(Date.now);
@@ -47,7 +39,7 @@ export function MarkedPoolSwap() {
   const recheck = useCallback(async () => {
     if (!client) throw new Error("no Base Sepolia connection");
     const fresh = await readMarks(client, BASE_SEPOLIA);
-    queryClient.setQueryData(MARKS_KEY, fresh);
+    queryClient.setQueryData(marksKey(BASE_SEPOLIA.id), fresh);
     return leftOut(fresh).map((m) => m.pool.id);
   }, [client, queryClient]);
 
